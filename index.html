@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <title>Vocal tools</title>
+<link rel="icon" href="data:,">
 <style>
   body { font: 16px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 3rem auto; padding: 0 1rem; color: #222; }
   h2 { margin-top: 3rem; }
@@ -20,11 +21,27 @@
   audio { flex: 1; }
   .error { color: #b00; }
   .hint { color: #666; font-size: .9rem; }
+
+  .lib-head { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem; }
+  .lib-head .grow { flex: 1; }
+  code { font-size: .85rem; background: #f3f3f3; padding: .1rem .3rem; border-radius: 4px; word-break: break-all; }
+  table { width: 100%; border-collapse: collapse; margin-top: 1rem; font-size: .95rem; }
+  td { padding: .5rem .4rem; border-top: 1px solid #eee; vertical-align: top; }
+  .kind { font-size: .75rem; text-transform: uppercase; letter-spacing: .04em; color: #555; background: #eee; border-radius: 4px; padding: .1rem .35rem; }
+  .title { font-weight: 600; }
+  .meta { color: #666; font-size: .85rem; }
+  .files { display: flex; flex-wrap: wrap; gap: .4rem .9rem; margin-top: .3rem; }
+  .file { display: inline-flex; align-items: center; gap: .3rem; }
+  .icon { border: 1px solid #ccc; background: #fff; border-radius: 6px; width: 1.9rem; height: 1.9rem; cursor: pointer; font-size: .9rem; line-height: 1; padding: 0; color: #222; text-decoration: none; display: inline-flex; align-items: center; justify-content: center; }
+  .icon:hover { background: #f3f3f3; }
+  .icon.playing { background: #06c; color: #fff; border-color: #06c; }
+  .actions { white-space: nowrap; text-align: right; }
+  .empty { color: #666; margin-top: 1rem; }
 </style>
 </head>
 <body>
 <h1>Vocal tools</h1>
-<p class="hint">Everything runs on this machine. Nothing is uploaded anywhere else.</p>
+<p class="hint">Everything runs on this machine. Nothing is uploaded anywhere else. Every result is kept in the <a href="#library">Library</a> at the bottom.</p>
 
 <h2>Split</h2>
 <p>Drop a song (mp3, wav, m4a, flac…) to get the vocals and the instrumental.</p>
@@ -58,7 +75,25 @@
 </div>
 <div id="sync-results"></div>
 
+<h2 id="library">Library</h2>
+<div class="lib-head">
+  <div class="grow">
+    <div id="lib-summary">Loading…</div>
+    <div class="hint">Stored in <code id="lib-folder"></code></div>
+  </div>
+  <button id="lib-open">Open folder</button>
+  <button id="lib-clear">Delete all</button>
+</div>
+<table id="lib-table"></table>
+<div id="lib-empty" class="empty" hidden>Nothing yet. Results appear here as you make them.</div>
+
 <script>
+// ---------- shared ----------
+const $ = id => document.getElementById(id);
+const seconds = t0 => Math.round((performance.now() - t0) / 1000);
+const fileUrl = (id, f) => `/files/${id}/${f.file}`;
+const mb = bytes => bytes < 1e6 ? `${Math.max(1, Math.round(bytes / 1e3))} KB` : `${(bytes / 1e6).toFixed(bytes < 1e8 ? 1 : 0)} MB`;
+
 function dropZone(el, onFile) {
   const pick = document.createElement('input');
   pick.type = 'file';
@@ -76,60 +111,10 @@ function dropZone(el, onFile) {
   };
 }
 
-function resultBox(parent, title, message) {
-  const box = document.createElement('div');
-  box.className = 'result';
-  box.innerHTML = '<h3></h3><p></p>';
-  box.querySelector('h3').textContent = title;
-  box.querySelector('p').textContent = message;
-  parent.prepend(box);
-  return box;
-}
-
-function addTrack(box, label, url, filename) {
-  const row = document.createElement('div');
-  row.className = 'row';
-  row.innerHTML = `<span>${label}</span><audio controls src="${url}"></audio><a>Download</a>`;
-  row.querySelector('a').href = url;
-  row.querySelector('a').download = filename;
-  box.append(row);
-}
-
-function fail(box, err) {
-  const p = box.querySelector('p');
-  p.className = 'error';
-  p.textContent = 'Failed: ' + err.message;
-}
-
-async function postFile(path, file) {
-  const res = await fetch(path, { method: 'POST', body: file, headers: { 'X-Filename': encodeURIComponent(file.name) } });
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.error || res.statusText);
-  return data;
-}
-
-const baseName = f => f.name.replace(/\.[^.]+$/, '');
-const seconds = t0 => Math.round((performance.now() - t0) / 1000);
-
-// Split
-const splitDrop = document.getElementById('split-drop');
-dropZone(splitDrop, async file => {
-  const box = resultBox(document.getElementById('split-results'), file.name, 'Separating…');
-  splitDrop.classList.add('busy');
-  const t0 = performance.now();
-  try {
-    const data = await postFile('/split', file);
-    box.querySelector('p').textContent = `Done in ${seconds(t0)} s.`;
-    addTrack(box, 'Vocals', data.vocals, `${baseName(file)} - vocals.wav`);
-    addTrack(box, 'Instrumental', data.instrumental, `${baseName(file)} - instrumental.wav`);
-  } catch (err) { fail(box, err); }
-  finally { splitDrop.classList.remove('busy'); }
-});
-
 function filePair(keys, button) {
   const picked = {};
   for (const key of keys) {
-    const el = document.getElementById(`${key}-drop`);
+    const el = $(`${key}-drop`);
     const label = el.firstChild.textContent;
     dropZone(el, file => {
       picked[key] = file;
@@ -141,12 +126,44 @@ function filePair(keys, button) {
   return picked;
 }
 
-async function startJob(path, params) {
-  const res = await fetch(path + '?' + new URLSearchParams(params), { method: 'POST' });
+function resultBox(parent, title, message) {
+  const box = document.createElement('div');
+  box.className = 'result';
+  box.innerHTML = '<h3></h3><p></p>';
+  box.querySelector('h3').textContent = title;
+  box.querySelector('p').textContent = message;
+  parent.prepend(box);
+  return box;
+}
+
+function showResult(box, meta, message) {
+  box.querySelector('p').textContent = message;
+  for (const f of meta.files) {
+    const row = document.createElement('div');
+    row.className = 'row';
+    row.innerHTML = '<span></span><audio controls></audio><a>Download</a>';
+    row.querySelector('span').textContent = f.label;
+    row.querySelector('audio').src = fileUrl(meta.id, f);
+    row.querySelector('a').href = fileUrl(meta.id, f);
+    row.querySelector('a').download = f.download;
+    box.append(row);
+  }
+  loadLibrary();
+}
+
+function fail(box, err) {
+  const p = box.querySelector('p');
+  p.className = 'error';
+  p.textContent = 'Failed: ' + err.message;
+}
+
+async function post(path, body, headers) {
+  const res = await fetch(path, { method: 'POST', body, headers });
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || res.statusText);
-  return data.job;
+  return data;
 }
+const postFile = (path, file) => post(path, file, { 'X-Filename': encodeURIComponent(file.name) });
 
 async function waitFor(job, p, t0, verb) {
   while (true) {
@@ -158,37 +175,45 @@ async function waitFor(job, p, t0, verb) {
   }
 }
 
-// Convert
-const go = document.getElementById('go');
-const picked = filePair(['source', 'target'], go);
+// ---------- split ----------
+const splitDrop = $('split-drop');
+dropZone(splitDrop, async file => {
+  const box = resultBox($('split-results'), file.name, 'Separating…');
+  splitDrop.classList.add('busy');
+  const t0 = performance.now();
+  try {
+    showResult(box, await postFile('/split', file), `Done in ${seconds(t0)} s.`);
+  } catch (err) { fail(box, err); }
+  finally { splitDrop.classList.remove('busy'); }
+});
 
+// ---------- convert ----------
+const go = $('go');
+const picked = filePair(['source', 'target'], go);
 go.onclick = async () => {
   const { source, target } = picked;
-  const box = resultBox(document.getElementById('convert-results'), `${source.name} → voice of ${target.name}`, 'Uploading…');
+  const box = resultBox($('convert-results'), `${source.name} in the voice of ${target.name}`, 'Uploading…');
   const t0 = performance.now();
   try {
     const [s, t] = await Promise.all([postFile('/upload', source), postFile('/upload', target)]);
     const q = new URLSearchParams({
-      source: s.id, target: t.id,
-      singing: document.getElementById('singing').checked ? '1' : '0',
-      steps: document.getElementById('steps').value,
-      shift: document.getElementById('shift').value,
+      source: s.id, target: t.id, singing: $('singing').checked ? '1' : '0',
+      steps: $('steps').value, shift: $('shift').value,
     });
-    const p = box.querySelector('p');
-    const st = await waitFor(await startJob('/convert', q), p, t0, 'Converting');
-    p.textContent = `Done in ${seconds(t0)} s.`;
-    addTrack(box, 'Converted', st.converted, `${baseName(source)} - as ${baseName(target)}.wav`);
+    const st = await waitFor((await post('/convert?' + q)).job, box.querySelector('p'), t0, 'Converting');
+    showResult(box, st, `Done in ${seconds(t0)} s.`);
   } catch (err) { fail(box, err); }
 };
 
-// Sync
-const syncGo = document.getElementById('sync-go');
+// ---------- sync ----------
+const syncGo = $('sync-go');
 const syncPicked = filePair(['song', 'take'], syncGo);
 
 function describe(r) {
-  const parts = [`Placed ${r.phrases_placed} phrase${r.phrases_placed === 1 ? '' : 's'}`];
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  const parts = [`Placed ${plural(r.phrases_placed, 'phrase')}`];
   if (r.phrases_skipped) parts.push(`left out ${r.phrases_skipped} that didn't match the song`);
-  if (r.key_shift) parts.push(`you sang ${Math.abs(r.key_shift)} semitone${Math.abs(r.key_shift) === 1 ? '' : 's'} ${r.key_shift > 0 ? 'higher' : 'lower'} than the original`);
+  if (r.key_shift) parts.push(`you sang ${plural(Math.abs(r.key_shift), 'semitone')} ${r.key_shift > 0 ? 'higher' : 'lower'} than the original`);
   if (r.offset_range > 0.15) parts.push(`your phrases needed moving by different amounts (up to ${r.offset_range} s apart)`);
   let text = parts.join('; ') + '.';
   if (r.match_cost > 0.35) text += ' The match looks doubtful: check that this is the right song.';
@@ -197,19 +222,97 @@ function describe(r) {
 
 syncGo.onclick = async () => {
   const { song, take } = syncPicked;
-  const box = resultBox(document.getElementById('sync-results'), `${take.name} → ${song.name}`, 'Uploading…');
+  const box = resultBox($('sync-results'), `${take.name} synced to ${song.name}`, 'Uploading…');
   const t0 = performance.now();
   try {
     const [s, t] = await Promise.all([postFile('/upload', song), postFile('/upload', take)]);
-    const p = box.querySelector('p');
-    const st = await waitFor(await startJob('/sync', {
-      song: s.id, take: t.id, music: document.getElementById('take-music').checked ? '1' : '0',
-    }), p, t0, 'Syncing');
-    p.textContent = `Done in ${seconds(t0)} s. ${describe(st.report)}`;
-    addTrack(box, 'Mix', st.mix, `${baseName(take)} - synced mix.wav`);
-    addTrack(box, 'Your vocal', st.vocal, `${baseName(take)} - synced vocal.wav`);
+    const q = new URLSearchParams({ song: s.id, take: t.id, music: $('take-music').checked ? '1' : '0' });
+    const st = await waitFor((await post('/sync?' + q)).job, box.querySelector('p'), t0, 'Syncing');
+    showResult(box, st, `Done in ${seconds(t0)} s. ${describe(st.report)}`);
   } catch (err) { fail(box, err); }
 };
+
+// ---------- library ----------
+const player = new Audio();
+let playingButton = null;
+function stopPlaying() {
+  player.pause();
+  if (playingButton) { playingButton.classList.remove('playing'); playingButton.textContent = '▶'; }
+  playingButton = null;
+}
+player.onended = stopPlaying;
+
+function iconButton(text, title, onclick) {
+  const b = document.createElement('button');
+  b.className = 'icon';
+  b.textContent = text;
+  b.title = title;
+  b.onclick = onclick;
+  return b;
+}
+
+function renderLibrary(lib) {
+  const n = lib.items.length;
+  $('lib-summary').textContent = `${n} result${n === 1 ? '' : 's'}, ${mb(lib.bytes)} on disk. Results older than ${lib.keep_days} days are deleted when the app starts.`;
+  $('lib-folder').textContent = lib.folder;
+  $('lib-empty').hidden = n > 0;
+  $('lib-clear').disabled = n === 0;
+  const table = $('lib-table');
+  table.innerHTML = '';
+  for (const item of lib.items) {
+    const tr = table.insertRow();
+    const info = tr.insertCell();
+    info.innerHTML = '<span class="kind"></span> <span class="title"></span><div class="meta"></div><div class="files"></div>';
+    info.querySelector('.kind').textContent = item.kind;
+    info.querySelector('.title').textContent = item.title;
+    info.querySelector('.meta').textContent = [item.when, mb(item.bytes), item.note].filter(Boolean).join(' · ');
+    for (const f of item.files) {
+      const url = fileUrl(item.id, f);
+      const wrap = document.createElement('span');
+      wrap.className = 'file';
+      const play = iconButton('▶', `Play ${f.label}`, () => {
+        if (playingButton === play) return stopPlaying();
+        stopPlaying();
+        player.src = url;
+        player.play();
+        playingButton = play;
+        play.classList.add('playing');
+        play.textContent = '❚❚';
+      });
+      const dl = document.createElement('a');
+      dl.className = 'icon';
+      dl.href = url;
+      dl.download = f.download;
+      dl.title = `Download ${f.label}`;
+      dl.textContent = '⬇';
+      wrap.append(play, dl, document.createTextNode(f.label));
+      info.querySelector('.files').append(wrap);
+    }
+    const actions = tr.insertCell();
+    actions.className = 'actions';
+    actions.append(
+      iconButton('📁', 'Show in Finder', () => post('/reveal?id=' + item.id)),
+      document.createTextNode(' '),
+      iconButton('🗑', 'Delete', async () => {
+        if (!confirm(`Delete “${item.title}”? This can't be undone.`)) return;
+        stopPlaying();
+        renderLibrary(await post('/delete/' + item.id));
+      }),
+    );
+  }
+}
+
+async function loadLibrary() {
+  renderLibrary(await (await fetch('/library')).json());
+}
+
+$('lib-open').onclick = () => post('/reveal');
+$('lib-clear').onclick = async () => {
+  if (!confirm('Delete every result in the library? This can\'t be undone.')) return;
+  stopPlaying();
+  renderLibrary(await post('/clear'));
+};
+loadLibrary();
 </script>
 </body>
 </html>

@@ -29,7 +29,10 @@ On a Mac, open **Vocal Tools** from `~/Applications` (setup builds it; drag it t
 
 It opens http://localhost:8010 and a Terminal window. The tools run while that window is open; close it or press Ctrl+C to stop. Opening the app again while it's running just reopens the page. If you move this folder, run `./make-app.sh` to rebuild the app.
 
-Results are saved in `data/`. The page also lets you play and download them.
+Every result is listed in the **Library** at the bottom of the page, with play, download, delete, and a button that opens its folder in Finder. Files are stored in `data/` inside this folder:
+
+- `data/uploads/` holds files you drop on Convert and Sync. They're deleted as soon as the job ends.
+- `data/results/` holds results. Anything older than 7 days is deleted when the app starts, so download what you want to keep. Change `KEEP_DAYS` in `server.py` to keep them longer.
 
 ## Speed
 

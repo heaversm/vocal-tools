@@ -1,10 +1,14 @@
-"""Two local audio tools on one page, nothing leaves the machine:
+"""Local audio tools on one page, nothing leaves the machine:
   Split    - drop a song, get the vocals and the instrumental (Demucs).
   Convert  - drop a performance and a target voice, get the performance sung/spoken in that voice (Seed-VC).
   Sync     - drop a song and a recording of someone singing it, get the singing lined up with the song (sync.py).
+  Library  - every result, with play, download, delete, and a link to the folder on disk.
 
-Install once with ./setup.sh, then start with ./start.command (or double-click it in Finder).
-Uploads and results go in data/, which git ignores.
+Install once with ./setup.sh, then open the Vocal Tools app (or run ./start.command).
+
+Files go in data/, which git ignores:
+  data/uploads/<id>/  files dropped on Convert and Sync, deleted as soon as the job ends
+  data/results/<id>/  each result's audio plus meta.json; anything older than KEEP_DAYS is deleted at startup
 """
 
 import http.server
@@ -14,26 +18,98 @@ import shutil
 import subprocess
 import sys
 import threading
+import time
 import uuid
+from datetime import datetime
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, unquote, urlparse
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # for sync.py; start.command runs Python with -I, which leaves this folder out
-WORK = HERE / "data"
+DATA = HERE / "data"
+UPLOADS = DATA / "uploads"
+RESULTS = DATA / "results"
 SEED_VC = HERE / "vendor" / "seed-vc"
-FILES = {"vocals.wav", "no_vocals.wav", "converted.wav", "synced_mix.wav", "synced_vocal.wav"}
+KEEP_DAYS = 7
+ID = r"[0-9a-f]{32}"
 JOBS = {}  # job id -> {"state": "running" | "done" | "failed", ...}
 
 
-def save_upload(data, filename):
-    job = uuid.uuid4().hex
-    folder = WORK / job
-    folder.mkdir(parents=True)
-    src = folder / f"input{Path(filename).suffix.lower() or '.audio'}"
-    src.write_bytes(data)
-    return job, src
+# ---------- storage ----------
 
+def new_id():
+    return uuid.uuid4().hex
+
+
+def save_upload(data, filename):
+    uid = new_id()
+    folder = UPLOADS / uid
+    folder.mkdir(parents=True)
+    (folder / f"input{Path(filename).suffix.lower() or '.audio'}").write_bytes(data)
+    (folder / "name.txt").write_text(filename)
+    return uid
+
+
+def upload(uid):
+    """(path, original filename) of an upload, or None."""
+    if not re.fullmatch(ID, uid or ""):
+        return None
+    found = list((UPLOADS / uid).glob("input.*"))
+    return (found[0], (UPLOADS / uid / "name.txt").read_text()) if found else None
+
+
+def remove(folder):
+    shutil.rmtree(folder, ignore_errors=True)
+
+
+def stem(name):
+    return Path(name).stem
+
+
+def finish(job, kind, title, files, note=""):
+    """Record a result so the library can list it. files: [(label, file name, download name)]."""
+    meta = {"id": job, "kind": kind, "title": title, "note": note, "created": time.time(),
+            "files": [{"label": l, "file": f, "download": d} for l, f, d in files]}
+    (RESULTS / job / "meta.json").write_text(json.dumps(meta))
+    return meta
+
+
+def size(folder):
+    return sum(f.stat().st_size for f in folder.rglob("*") if f.is_file())
+
+
+def library():
+    items = []
+    for folder in RESULTS.iterdir() if RESULTS.exists() else []:
+        meta_file = folder / "meta.json"
+        if not meta_file.exists():
+            continue
+        meta = json.loads(meta_file.read_text())
+        meta.update(id=folder.name, bytes=size(folder), folder=str(folder),
+                    when=datetime.fromtimestamp(meta["created"]).strftime("%b %-d, %-I:%M %p"))
+        items.append(meta)
+    items.sort(key=lambda m: m["created"], reverse=True)
+    return {"items": items, "folder": str(DATA), "bytes": size(DATA) if DATA.exists() else 0, "keep_days": KEEP_DAYS}
+
+
+def sweep():
+    """At startup: delete results older than KEEP_DAYS, and uploads left behind by jobs that never ran."""
+    cutoff = time.time() - KEEP_DAYS * 86400
+    removed = 0
+    for root in (RESULTS, UPLOADS):
+        for folder in root.iterdir() if root.exists() else []:
+            if folder.stat().st_mtime < cutoff or root is UPLOADS:
+                remove(folder)
+                removed += 1
+    return removed
+
+
+def reveal(folder):
+    """Open a folder in Finder (or the Linux file manager)."""
+    subprocess.run(["open" if sys.platform == "darwin" else "xdg-open", str(folder)])
+
+
+# ---------- tools ----------
 
 def last_line(text, fallback):
     lines = [l for l in text.strip().splitlines() if l.strip()]
@@ -41,23 +117,33 @@ def last_line(text, fallback):
 
 
 def split(data, filename):
-    job, src = save_upload(data, filename)
-    folder = src.parent
-    r = subprocess.run([sys.executable, "-m", "demucs", "--two-stems=vocals", "-n", "htdemucs", "-o", str(folder), str(src)],
-                       capture_output=True, text=True)
-    if r.returncode != 0:
-        raise RuntimeError(last_line(r.stderr, "Demucs failed"))
-    for name in ("vocals.wav", "no_vocals.wav"):
-        shutil.move(folder / "htdemucs" / "input" / name, folder / name)
-    shutil.rmtree(folder / "htdemucs")
-    return {"vocals": f"/jobs/{job}/vocals.wav", "instrumental": f"/jobs/{job}/no_vocals.wav"}
+    job = new_id()
+    folder = RESULTS / job
+    folder.mkdir(parents=True)
+    src = folder / f"input{Path(filename).suffix.lower() or '.audio'}"
+    src.write_bytes(data)
+    try:
+        r = subprocess.run([sys.executable, "-m", "demucs", "--two-stems=vocals", "-n", "htdemucs", "-o", str(folder), str(src)],
+                           capture_output=True, text=True)
+        if r.returncode != 0:
+            raise RuntimeError(last_line(r.stderr, "Demucs failed"))
+        for name in ("vocals.wav", "no_vocals.wav"):
+            shutil.move(folder / "htdemucs" / "input" / name, folder / name)
+    except Exception:
+        remove(folder)
+        raise
+    remove(folder / "htdemucs")
+    src.unlink()
+    s = stem(filename)
+    return finish(job, "Split", filename, [("Vocals", "vocals.wav", f"{s} - vocals.wav"),
+                                           ("Instrumental", "no_vocals.wav", f"{s} - instrumental.wav")])
 
 
 def convert(job, source, target, singing, steps, shift):
-    folder = WORK / job
+    (src, src_name), (tgt, tgt_name) = source, target
+    folder = RESULTS / job
     out = folder / "out"
-    cmd = [sys.executable, "inference.py",
-           "--source", str(source), "--target", str(target), "--output", str(out),
+    cmd = [sys.executable, "inference.py", "--source", str(src), "--target", str(tgt), "--output", str(out),
            "--diffusion-steps", str(steps), "--f0-condition", str(singing),
            "--semi-tone-shift", str(shift), "--fp16", "False"]
     try:
@@ -66,46 +152,52 @@ def convert(job, source, target, singing, steps, shift):
         if r.returncode != 0 or not wavs:
             raise RuntimeError(last_line(r.stderr, "Seed-VC failed"))
         shutil.move(wavs[0], folder / "converted.wav")
-        shutil.rmtree(out)
-        JOBS[job] = {"state": "done", "converted": f"/jobs/{job}/converted.wav"}
+        remove(out)
+        note = f"{'singing' if singing else 'speech'}, {steps} steps" + (f", shifted {shift:+d}" if shift else "")
+        JOBS[job] = {"state": "done", **finish(job, "Convert", f"{src_name} in the voice of {tgt_name}",
+                     [("Converted", "converted.wav", f"{stem(src_name)} - as {stem(tgt_name)}.wav")], note)}
     except Exception as e:
+        remove(folder)
         JOBS[job] = {"state": "failed", "error": str(e)}
+    finally:
+        remove(src.parent)
+        remove(tgt.parent)
 
 
 def run_sync(job, song, take, take_has_music):
+    (song_path, song_name), (take_path, take_name) = song, take
+    folder = RESULTS / job
     try:
         import sync  # librosa is slow to import, so only when needed
-        folder = WORK / job
-        report = sync.sync(song, take, folder, take_has_music)
-        shutil.rmtree(folder / "work")
-        JOBS[job] = {"state": "done", "report": report,
-                     "mix": f"/jobs/{job}/synced_mix.wav", "vocal": f"/jobs/{job}/synced_vocal.wav"}
+        report = sync.sync(song_path, take_path, folder, take_has_music)
+        remove(folder / "work")
+        s = stem(take_name)
+        JOBS[job] = {"state": "done", "report": report, **finish(job, "Sync", f"{take_name} synced to {song_name}",
+                     [("Mix", "synced_mix.wav", f"{s} - synced mix.wav"),
+                      ("Your vocal", "synced_vocal.wav", f"{s} - synced vocal.wav")])}
     except Exception as e:
+        remove(folder)
         JOBS[job] = {"state": "failed", "error": str(e)}
-
-
-def uploaded(q, keys):
-    """Paths of earlier /upload files named in the query string, or an error message."""
-    paths = {}
-    for key in keys:
-        if not re.fullmatch(r"[0-9a-f]{32}", q.get(key, "")):
-            return None, f"missing {key}"
-        found = list((WORK / q[key]).glob("input.*"))
-        if not found:
-            return None, f"{key} not found"
-        paths[key] = found[0]
-    return paths, None
+    finally:
+        remove(song_path.parent)
+        remove(take_path.parent)
 
 
 def start(target, *args):
-    job = uuid.uuid4().hex
-    (WORK / job).mkdir(parents=True)
+    job = new_id()
+    (RESULTS / job).mkdir(parents=True)
     JOBS[job] = {"state": "running"}
     threading.Thread(target=target, args=(job, *args), daemon=True).start()
     return {"job": job}
 
 
+# ---------- web ----------
+
 class Handler(http.server.BaseHTTPRequestHandler):
+    def log_message(self, fmt, *args):  # keep the Terminal window quiet except for errors
+        if not args or not str(args[1]).startswith(("2", "3")):
+            super().log_message(fmt, *args)
+
     def send(self, code, body, kind="application/json"):
         if isinstance(body, dict):
             body = json.dumps(body).encode()
@@ -120,51 +212,73 @@ class Handler(http.server.BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         return self.rfile.read(length) if length else b""
 
+    def filename(self):
+        return unquote(self.headers.get("X-Filename", "upload"))
+
     def do_GET(self):
         url = urlparse(self.path)
         if url.path in ("/", "/index.html"):
             return self.send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
-        m = re.fullmatch(r"/jobs/([0-9a-f]{32})/([a-z_]+\.wav)", url.path)
-        if m and m.group(2) in FILES and (WORK / m.group(1) / m.group(2)).exists():
-            return self.send(200, (WORK / m.group(1) / m.group(2)).read_bytes(), "audio/wav")
-        m = re.fullmatch(r"/status/([0-9a-f]{32})", url.path)
+        if url.path == "/library":
+            return self.send(200, library())
+        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.wav)", url.path)
+        if m and (RESULTS / m.group(1) / m.group(2)).is_file():
+            return self.send(200, (RESULTS / m.group(1) / m.group(2)).read_bytes(), "audio/wav")
+        m = re.fullmatch(rf"/status/({ID})", url.path)
         if m and m.group(1) in JOBS:
             return self.send(200, JOBS[m.group(1)])
         self.send(404, {"error": "not found"})
 
     def do_POST(self):
         url = urlparse(self.path)
-        if url.path == "/split":
+        q = {k: v[0] for k, v in parse_qs(url.query).items()}
+
+        if url.path in ("/split", "/upload"):
             data = self.body()
             if not data:
                 return self.send(400, {"error": "empty upload"})
+            if url.path == "/upload":  # held for /convert or /sync
+                return self.send(200, {"id": save_upload(data, self.filename())})
             try:
-                return self.send(200, split(data, self.headers.get("X-Filename", "upload")))
+                return self.send(200, split(data, self.filename()))
             except Exception as e:
                 return self.send(500, {"error": str(e)})
-        if url.path == "/upload":  # store a file for /convert, return its id
-            data = self.body()
-            if not data:
-                return self.send(400, {"error": "empty upload"})
-            job, _ = save_upload(data, self.headers.get("X-Filename", "upload"))
-            return self.send(200, {"id": job})
-        q = {k: v[0] for k, v in parse_qs(url.query).items()}
-        if url.path == "/convert":
-            paths, err = uploaded(q, ("source", "target"))
-            if err:
-                return self.send(400, {"error": err})
-            return self.send(200, start(convert, paths["source"], paths["target"], q.get("singing") == "1",
-                                        max(1, min(100, int(q.get("steps", 30)))), max(-24, min(24, int(q.get("shift", 0))))))
-        if url.path == "/sync":
-            paths, err = uploaded(q, ("song", "take"))
-            if err:
-                return self.send(400, {"error": err})
-            return self.send(200, start(run_sync, paths["song"], paths["take"], q.get("music") == "1"))
+
+        if url.path in ("/convert", "/sync"):
+            keys = ("source", "target") if url.path == "/convert" else ("song", "take")
+            files = [upload(q.get(k)) for k in keys]
+            if not all(files):
+                return self.send(400, {"error": "upload missing; drop the files again"})
+            if url.path == "/convert":
+                return self.send(200, start(convert, *files, q.get("singing") == "1",
+                                            max(1, min(100, int(q.get("steps", 30)))),
+                                            max(-24, min(24, int(q.get("shift", 0))))))
+            return self.send(200, start(run_sync, *files, q.get("music") == "1"))
+
+        m = re.fullmatch(rf"/delete/({ID})", url.path)
+        if m:
+            if JOBS.get(m.group(1), {}).get("state") == "running":
+                return self.send(409, {"error": "still running"})
+            remove(RESULTS / m.group(1))
+            return self.send(200, library())
+        if url.path == "/clear":
+            running = {j for j, s in JOBS.items() if s.get("state") == "running"}
+            for folder in RESULTS.iterdir() if RESULTS.exists() else []:
+                if folder.name not in running:
+                    remove(folder)
+            return self.send(200, library())
+        if url.path == "/reveal":
+            target = RESULTS / q["id"] if re.fullmatch(ID, q.get("id", "")) else DATA
+            reveal(target if target.exists() else DATA)
+            return self.send(200, {"ok": True})
         self.send(404, {"error": "not found"})
 
 
 if __name__ == "__main__":
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8010
-    WORK.mkdir(parents=True, exist_ok=True)
+    RESULTS.mkdir(parents=True, exist_ok=True)
+    UPLOADS.mkdir(parents=True, exist_ok=True)
+    removed = sweep()
     print(f"Vocal tools on http://localhost:{port}")
+    print(f"Files are in {DATA}" + (f" (cleared {removed} old item{'s' * (removed != 1)})" if removed else ""))
     http.server.ThreadingHTTPServer(("127.0.0.1", port), Handler).serve_forever()
