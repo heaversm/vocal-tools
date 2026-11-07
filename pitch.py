@@ -42,6 +42,13 @@ def fold(cents):
 
 
 def pitch_match(song_path, take_path, out_dir, take_has_music=False):
+    """Sync, score, write pitch.json. Returns the score."""
+    return analyze(song_path, take_path, out_dir, take_has_music)[0]
+
+
+def analyze(song_path, take_path, out_dir, take_has_music=False):
+    """As pitch_match, plus the full-resolution tracks: (score, {"t", "yours", "target", "diff"}),
+    where target is the original melody in the take's key and octave, in MIDI note numbers."""
     out_dir = Path(out_dir)
     report = sync.sync(song_path, take_path, out_dir, take_has_music)
     song_vocal, _ = sync.separate(song_path, out_dir / "work" / "song")  # already split by sync, so instant
@@ -98,7 +105,7 @@ def pitch_match(song_path, take_path, out_dir, take_has_music=False):
         "chart": chart,
     }
     (out_dir / "pitch.json").write_text(json.dumps(result))
-    return result
+    return result, {"t": t, "yours": yours, "target": target + 12 * octave, "diff": diff}
 
 
 if __name__ == "__main__":

@@ -91,6 +91,20 @@
 </div>
 <div id="pitch-results"></div>
 
+<h2>Tune to original</h2>
+<p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Your take is lined up, then each moment of your pitch is pulled toward the original singer's note: auto-tune toward that exact melody, in your own key and octave. Your voice and timing stay yours.</p>
+<div class="pair">
+  <div class="drop" id="tsong-drop">Song</div>
+  <div class="drop" id="ttake-drop">Your singing</div>
+</div>
+<div class="opts">
+  <label>Strength <input type="range" id="strength" min="0" max="100" value="80"> <span id="strength-val">80%</span></label>
+  <label><input type="checkbox" id="ttake-music"> My recording has music in it</label>
+  <button id="tune-go" disabled>Tune it</button>
+</div>
+<p class="hint">100% copies the original's pitch exactly, including its vibrato and slides, and sounds the most processed. Around 60–80% keeps more of your own expression.</p>
+<div id="tune-results"></div>
+
 <h2 id="library">Library</h2>
 <div class="lib-head">
   <div class="grow">
@@ -324,6 +338,24 @@ pitchGo.onclick = async () => {
     const st = await waitFor((await post('/pitch?' + q)).job, box.querySelector('p'), t0, 'Lining up and scoring');
     box.querySelector('p').after(pitchView(st.pitch));
     showResult(box, st, `Done in ${seconds(t0)} s.`);
+  } catch (err) { fail(box, err); }
+};
+
+// ---------- tune ----------
+const tuneGo = $('tune-go');
+const tunePicked = filePair(['tsong', 'ttake'], tuneGo);
+$('strength').oninput = () => { $('strength-val').textContent = $('strength').value + '%'; };
+tuneGo.onclick = async () => {
+  const { tsong, ttake } = tunePicked;
+  const box = resultBox($('tune-results'), `${ttake.name} tuned to ${tsong.name}`, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const [s, t] = await Promise.all([postFile('/upload', tsong), postFile('/upload', ttake)]);
+    const q = new URLSearchParams({ song: s.id, take: t.id, music: $('ttake-music').checked ? '1' : '0',
+                                    strength: $('strength').value / 100 });
+    const st = await waitFor((await post('/tune?' + q)).job, box.querySelector('p'), t0, 'Lining up and tuning');
+    const r = st.tune;
+    showResult(box, st, `Done in ${seconds(t0)} s. On pitch: ${Math.round(r.before * 100)}% before, ${Math.round(r.after * 100)}% after. Typical correction ${r.typical_fix_cents} cents.`);
   } catch (err) { fail(box, err); }
 };
 

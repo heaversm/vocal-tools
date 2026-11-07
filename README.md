@@ -6,6 +6,7 @@ Audio tools on one local web page. Everything runs on your own machine. No accou
 - **Convert.** Drop a *performance* (the melody, timing and delivery to keep) and a *target voice* (1–30 s of the voice it should sound like). You get the performance back in the target voice. Uses [Seed-VC](https://github.com/Plachtaa/seed-vc). Works for singing and speech.
 - **Sync.** Drop a song and a recording of you singing it. Your singing is lined up with the song and mixed over the instrumental. It matches by melody rather than lyrics, so it works in any language, in a different key or octave, and for a take that covers only part of the song. Each phrase is placed on its own, so rushed or stretched gaps between lines still land on time. It never changes your speed within a phrase.
 - **Pitch match.** Same inputs as Sync. After lining your take up, it tracks the pitch of your voice and the original singer's and scores how often you were on the note (within 50 cents, half a semitone), how far you typically missed, and whether you lean sharp or flat. A chart shows your pitch over the original melody. Singing in another key or octave isn't counted against you.
+- **Tune to original.** Same inputs again. It pulls your pitch toward the original singer's notes, moment by moment, with a strength control, keeping your voice and timing. Re-synthesis uses the [WORLD](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder) vocoder. It reports your on-pitch score before and after. It helps off-pitch takes (a real cover went from 62% to 79% at 80% strength) and does nothing for takes that are already accurate.
 
 ## Requirements
 
@@ -42,6 +43,7 @@ Every result is listed in the **Library** at the bottom of the page, with play, 
 | Split a 30 s clip | about 8 s |
 | Sync a 15 s take to a 30 s song | about 16 s |
 | Pitch match the same | about 23 s |
+| Tune the same | about 35 s |
 | Convert a 30 s clip, 30 steps | about 10 min |
 | Convert an 8 s clip, 10 steps | about 90 s |
 

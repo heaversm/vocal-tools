@@ -3,6 +3,7 @@
   Convert  - drop a performance and a target voice, get the performance sung/spoken in that voice (Seed-VC).
   Sync     - drop a song and a recording of someone singing it, get the singing lined up with the song (sync.py).
   Pitch    - same inputs as Sync, plus a score for how closely the singing follows the original melody (pitch.py).
+  Tune     - same inputs again; pulls the singing onto the original singer's notes (tune.py).
   Library  - every result, with play, download, delete, and a link to the folder on disk.
 
 Install once with ./setup.sh, then open the Vocal Tools app (or run ./start.command).
@@ -206,6 +207,30 @@ def run_pitch(job, song, take, take_has_music):
         remove(take_path.parent)
 
 
+def run_tune(job, song, take, take_has_music, strength):
+    (song_path, song_name), (take_path, take_name) = song, take
+    folder = RESULTS / job
+    try:
+        import tune
+        r = tune.tune(song_path, take_path, folder, strength, take_has_music)
+        remove(folder / "work")
+        for leftover in ("sync.json", "pitch.json", "synced_mix.wav"):
+            (folder / leftover).unlink(missing_ok=True)
+        s = stem(take_name)
+        meta = finish(job, "Tune", f"{take_name} tuned to {song_name}",
+                      [("Tuned mix", "tuned_mix.wav", f"{s} - tuned mix.wav"),
+                       ("Tuned vocal", "tuned_vocal.wav", f"{s} - tuned vocal.wav"),
+                       ("Before", "synced_vocal.wav", f"{s} - synced vocal.wav")],
+                      f"{round(r['before'] * 100)}% → {round(r['after'] * 100)}% on pitch, strength {round(strength * 100)}%")
+        JOBS[job] = {"state": "done", "tune": r, **meta}
+    except Exception as e:
+        remove(folder)
+        JOBS[job] = {"state": "failed", "error": str(e)}
+    finally:
+        remove(song_path.parent)
+        remove(take_path.parent)
+
+
 def start(target, *args):
     job = new_id()
     (RESULTS / job).mkdir(parents=True)
@@ -268,7 +293,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send(500, {"error": str(e)})
 
-        if url.path in ("/convert", "/sync", "/pitch"):
+        if url.path in ("/convert", "/sync", "/pitch", "/tune"):
             keys = ("source", "target") if url.path == "/convert" else ("song", "take")
             files = [upload(q.get(k)) for k in keys]
             if not all(files):
@@ -277,7 +302,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(200, start(convert, *files, q.get("singing") == "1",
                                             max(1, min(100, int(q.get("steps", 30)))),
                                             max(-24, min(24, int(q.get("shift", 0))))))
-            return self.send(200, start(run_sync if url.path == "/sync" else run_pitch, *files, q.get("music") == "1"))
+            music = q.get("music") == "1"
+            if url.path == "/tune":
+                return self.send(200, start(run_tune, *files, music, max(0.0, min(1.0, float(q.get("strength", 0.8))))))
+            return self.send(200, start(run_sync if url.path == "/sync" else run_pitch, *files, music))
 
         m = re.fullmatch(rf"/delete/({ID})", url.path)
         if m:

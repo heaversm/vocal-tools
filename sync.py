@@ -85,6 +85,19 @@ def phrases(y):
     return [(a, b) for a, b in merged if b - a >= MIN_PHRASE]
 
 
+def write_mix(vocal, inst, song_vocal, out):
+    """Vocal (mono, OUT_SR) over the instrumental (channels x samples), at the original singer's loudness."""
+    orig, _ = librosa.load(song_vocal, sr=OUT_SR, mono=True)
+    n = min(len(vocal), inst.shape[1])
+    voiced = vocal[:n][vocal[:n] != 0]
+    gain = np.sqrt(np.mean(orig ** 2) / (np.mean(voiced ** 2) + 1e-12)) if voiced.size else 1.0
+    mix = inst[:, :n] + vocal[None, :n] * gain
+    peak = np.abs(mix).max()
+    if peak > 0.99:
+        mix *= 0.99 / peak
+    sf.write(out, mix.T, OUT_SR)
+
+
 def sync(song_path, take_path, out_dir, take_has_music=False):
     out_dir = Path(out_dir)
     work = out_dir / "work"
@@ -141,16 +154,8 @@ def sync(song_path, take_path, out_dir, take_has_music=False):
         if hi > lo:
             aligned[lo:hi] += piece[lo - at:hi - at]
 
-    # Mix: match the take's loudness to the original singer's, then guard against clipping.
-    orig, _ = librosa.load(song_vocal, sr=OUT_SR, mono=True)
-    gain = np.sqrt(np.mean(orig ** 2) / (np.mean(aligned[aligned != 0] ** 2) + 1e-12)) if aligned.any() else 1.0
-    mix = inst + aligned[None] * gain
-    peak = np.abs(mix).max()
-    if peak > 0.99:
-        mix *= 0.99 / peak
-
     sf.write(out_dir / "synced_vocal.wav", aligned, OUT_SR)
-    sf.write(out_dir / "synced_mix.wav", mix.T, OUT_SR)
+    write_mix(aligned, inst, song_vocal, out_dir / "synced_mix.wav")
 
     offsets = [p["offset"] for p in placed]
     report = {
