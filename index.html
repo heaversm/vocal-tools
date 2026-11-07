@@ -37,6 +37,10 @@
   .icon.playing { background: #06c; color: #fff; border-color: #06c; }
   .actions { white-space: nowrap; text-align: right; }
   .empty { color: #666; margin-top: 1rem; }
+  .score { font-size: 2rem; font-weight: 700; margin: .25rem 0; }
+  canvas.pitch { width: 100%; height: 220px; display: block; margin: .75rem 0 .25rem; background: #fafafa; border-radius: 6px; }
+  .legend { font-size: .85rem; color: #555; display: flex; gap: 1rem; flex-wrap: wrap; }
+  .legend i { display: inline-block; width: .9rem; height: .25rem; vertical-align: middle; margin-right: .3rem; border-radius: 2px; }
 </style>
 </head>
 <body>
@@ -74,6 +78,18 @@
   <button id="sync-go" disabled>Sync</button>
 </div>
 <div id="sync-results"></div>
+
+<h2>Pitch match</h2>
+<p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Your take is lined up with the song (as in Sync), then scored on how closely you followed the original singer's melody. Singing it in another key or octave isn't counted against you.</p>
+<div class="pair">
+  <div class="drop" id="psong-drop">Song</div>
+  <div class="drop" id="ptake-drop">Your singing</div>
+</div>
+<div class="opts">
+  <label><input type="checkbox" id="ptake-music"> My recording has music in it (strip it first)</label>
+  <button id="pitch-go" disabled>Score it</button>
+</div>
+<div id="pitch-results"></div>
 
 <h2 id="library">Library</h2>
 <div class="lib-head">
@@ -232,6 +248,85 @@ syncGo.onclick = async () => {
   } catch (err) { fail(box, err); }
 };
 
+// ---------- pitch ----------
+const pitchGo = $('pitch-go');
+const pitchPicked = filePair(['psong', 'ptake'], pitchGo);
+
+function drawPitch(canvas, c) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  canvas.width = w * dpr; canvas.height = h * dpr;
+  const g = canvas.getContext('2d');
+  g.scale(dpr, dpr);
+  const idx = c.t.map((_, i) => i).filter(i => c.orig[i] != null || c.yours[i] != null);
+  if (!idx.length) return;
+  const t0 = c.t[idx[0]], t1 = c.t[idx[idx.length - 1]];
+  const notes = idx.flatMap(i => [c.orig[i], c.yours[i]]).filter(v => v != null).sort((a, b) => a - b);
+  const lo = Math.floor(notes[Math.floor(notes.length * 0.01)] - 2), hi = Math.ceil(notes[Math.floor(notes.length * 0.99)] + 2);
+  const pad = 34;
+  const x = t => pad + (t - t0) / (t1 - t0 || 1) * (w - pad - 8);
+  const y = m => h - 18 - (m - lo) / (hi - lo || 1) * (h - 28);
+  g.font = '11px system-ui'; g.fillStyle = '#888'; g.strokeStyle = '#e6e6e6'; g.lineWidth = 1;
+  const names = ['C', 'C♯', 'D', 'D♯', 'E', 'F', 'F♯', 'G', 'G♯', 'A', 'A♯', 'B'];
+  for (let m = Math.ceil(lo); m <= hi; m++) {
+    if (m % 12 !== 0 && (hi - lo > 14 || m % 12 % 2)) continue;  // label Cs, or every other note when zoomed in
+    g.beginPath(); g.moveTo(pad, y(m)); g.lineTo(w - 8, y(m)); g.stroke();
+    g.fillText(names[m % 12] + (Math.floor(m / 12) - 1), 2, y(m) + 4);
+  }
+  for (let s = Math.ceil(t0 / 5) * 5; s <= t1; s += 5) g.fillText(`${s}s`, x(s) - 6, h - 4);
+  // Original: one grey line. Yours: segments coloured by how close each moment is.
+  g.lineWidth = 5; g.lineCap = 'round'; g.strokeStyle = '#d0d0d0';
+  g.beginPath();
+  let prev = -2;
+  for (const i of idx) {
+    if (c.orig[i] == null) continue;
+    i - prev === 1 ? g.lineTo(x(c.t[i]), y(c.orig[i])) : g.moveTo(x(c.t[i]), y(c.orig[i]));
+    prev = i;
+  }
+  g.stroke();
+  g.lineWidth = 2.5;
+  for (let k = 1; k < idx.length; k++) {
+    const i = idx[k], j = idx[k - 1];
+    if (c.yours[i] == null || c.yours[j] == null || i - j > 1) continue;
+    const d = Math.abs(c.diff[i] ?? 999);
+    g.strokeStyle = c.diff[i] == null ? '#999' : d < 50 ? '#2a9d4b' : d < 100 ? '#e09b2d' : '#d1453b';
+    g.beginPath(); g.moveTo(x(c.t[j]), y(c.yours[j])); g.lineTo(x(c.t[i]), y(c.yours[i])); g.stroke();
+  }
+}
+
+function pitchView(r) {
+  const wrap = document.createElement('div');
+  const lean = Math.abs(r.median_cents) < 10 ? 'no lean sharp or flat'
+    : `you tend to sing ${Math.abs(r.median_cents)} cents ${r.median_cents > 0 ? 'sharp' : 'flat'}`;
+  const where = [r.key_shift ? `${Math.abs(r.key_shift)} semitone${Math.abs(r.key_shift) === 1 ? '' : 's'} ${r.key_shift > 0 ? 'higher' : 'lower'}` : '',
+                 r.octave ? `${Math.abs(r.octave)} octave${Math.abs(r.octave) === 1 ? '' : 's'} ${r.octave > 0 ? 'up' : 'down'}` : ''].filter(Boolean).join(' and ');
+  wrap.innerHTML = `<div class="score"></div><p class="details"></p><canvas class="pitch"></canvas>
+    <div class="legend"><span><i style="background:#d0d0d0"></i>Original melody${where ? ' (moved to your key)' : ''}</span>
+    <span><i style="background:#2a9d4b"></i>You, on the note</span><span><i style="background:#e09b2d"></i>Within a semitone</span>
+    <span><i style="background:#d1453b"></i>Further off</span></div>`;
+  wrap.querySelector('.score').textContent = `${Math.round(r.on_pitch * 100)}% on pitch`;
+  wrap.querySelector('.details').textContent =
+    `Typical miss ${r.typical_miss} cents (100 = a semitone); ${lean}. ` +
+    `You sang over ${Math.round(r.coverage * 100)}% of the original's singing in the part you covered` +
+    (where ? `, ${where} than the original.` : '.') +
+    (r.sync.match_cost > 0.35 ? ' The match to the song looks doubtful: check that this is the right song.' : '');
+  requestAnimationFrame(() => drawPitch(wrap.querySelector('canvas'), r.chart));
+  return wrap;
+}
+
+pitchGo.onclick = async () => {
+  const { psong, ptake } = pitchPicked;
+  const box = resultBox($('pitch-results'), `${ptake.name} against ${psong.name}`, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const [s, t] = await Promise.all([postFile('/upload', psong), postFile('/upload', ptake)]);
+    const q = new URLSearchParams({ song: s.id, take: t.id, music: $('ptake-music').checked ? '1' : '0' });
+    const st = await waitFor((await post('/pitch?' + q)).job, box.querySelector('p'), t0, 'Lining up and scoring');
+    box.querySelector('p').after(pitchView(st.pitch));
+    showResult(box, st, `Done in ${seconds(t0)} s.`);
+  } catch (err) { fail(box, err); }
+};
+
 // ---------- library ----------
 const player = new Audio();
 let playingButton = null;
@@ -290,6 +385,15 @@ function renderLibrary(lib) {
     }
     const actions = tr.insertCell();
     actions.className = 'actions';
+    if (item.kind === 'Pitch') {
+      let shown = null;
+      actions.append(iconButton('📈', 'Show pitch chart', async () => {
+        if (shown) { shown.remove(); shown = null; return; }
+        const r = await (await fetch(`/files/${item.id}/pitch.json`)).json();
+        shown = pitchView(r);
+        info.append(shown);
+      }), document.createTextNode(' '));
+    }
     actions.append(
       iconButton('📁', 'Show in Finder', () => post('/reveal?id=' + item.id)),
       document.createTextNode(' '),

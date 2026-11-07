@@ -2,6 +2,7 @@
   Split    - drop a song, get the vocals and the instrumental (Demucs).
   Convert  - drop a performance and a target voice, get the performance sung/spoken in that voice (Seed-VC).
   Sync     - drop a song and a recording of someone singing it, get the singing lined up with the song (sync.py).
+  Pitch    - same inputs as Sync, plus a score for how closely the singing follows the original melody (pitch.py).
   Library  - every result, with play, download, delete, and a link to the folder on disk.
 
 Install once with ./setup.sh, then open the Vocal Tools app (or run ./start.command).
@@ -183,6 +184,28 @@ def run_sync(job, song, take, take_has_music):
         remove(take_path.parent)
 
 
+def run_pitch(job, song, take, take_has_music):
+    (song_path, song_name), (take_path, take_name) = song, take
+    folder = RESULTS / job
+    try:
+        import pitch
+        r = pitch.pitch_match(song_path, take_path, folder, take_has_music)
+        remove(folder / "work")
+        (folder / "sync.json").unlink(missing_ok=True)
+        s = stem(take_name)
+        meta = finish(job, "Pitch", f"{take_name} against {song_name}",
+                      [("Mix", "synced_mix.wav", f"{s} - synced mix.wav"),
+                       ("Your vocal", "synced_vocal.wav", f"{s} - synced vocal.wav")],
+                      f"{round(r['on_pitch'] * 100)}% on pitch")
+        JOBS[job] = {"state": "done", "pitch": r, **meta}
+    except Exception as e:
+        remove(folder)
+        JOBS[job] = {"state": "failed", "error": str(e)}
+    finally:
+        remove(song_path.parent)
+        remove(take_path.parent)
+
+
 def start(target, *args):
     job = new_id()
     (RESULTS / job).mkdir(parents=True)
@@ -221,9 +244,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
         if url.path == "/library":
             return self.send(200, library())
-        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.wav)", url.path)
-        if m and (RESULTS / m.group(1) / m.group(2)).is_file():
-            return self.send(200, (RESULTS / m.group(1) / m.group(2)).read_bytes(), "audio/wav")
+        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.(wav|json))", url.path)
+        if m and m.group(2) != "meta.json" and (RESULTS / m.group(1) / m.group(2)).is_file():
+            kind = "audio/wav" if m.group(3) == "wav" else "application/json"
+            return self.send(200, (RESULTS / m.group(1) / m.group(2)).read_bytes(), kind)
         m = re.fullmatch(rf"/status/({ID})", url.path)
         if m and m.group(1) in JOBS:
             return self.send(200, JOBS[m.group(1)])
@@ -244,7 +268,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception as e:
                 return self.send(500, {"error": str(e)})
 
-        if url.path in ("/convert", "/sync"):
+        if url.path in ("/convert", "/sync", "/pitch"):
             keys = ("source", "target") if url.path == "/convert" else ("song", "take")
             files = [upload(q.get(k)) for k in keys]
             if not all(files):
@@ -253,7 +277,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(200, start(convert, *files, q.get("singing") == "1",
                                             max(1, min(100, int(q.get("steps", 30)))),
                                             max(-24, min(24, int(q.get("shift", 0))))))
-            return self.send(200, start(run_sync, *files, q.get("music") == "1"))
+            return self.send(200, start(run_sync if url.path == "/sync" else run_pitch, *files, q.get("music") == "1"))
 
         m = re.fullmatch(rf"/delete/({ID})", url.path)
         if m:

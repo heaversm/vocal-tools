@@ -31,6 +31,7 @@ JOIN_GAP = 0.2      # seconds; silences shorter than this stay inside a phrase
 
 def separate(path, work):
     """Demucs two-stem split. Returns (vocals.wav, no_vocals.wav)."""
+    work.mkdir(parents=True, exist_ok=True)
     out = work / "htdemucs" / Path(path).stem
     if not (out / "vocals.wav").exists():
         r = subprocess.run([sys.executable, "-m", "demucs", "--two-stems=vocals", "-n", "htdemucs",
@@ -89,8 +90,8 @@ def sync(song_path, take_path, out_dir, take_has_music=False):
     work = out_dir / "work"
     work.mkdir(parents=True, exist_ok=True)
 
-    song_vocal, instrumental = separate(song_path, work)
-    take_voice = separate(take_path, work)[0] if take_has_music else take_path
+    song_vocal, instrumental = separate(song_path, work / "song")
+    take_voice = separate(take_path, work / "take")[0] if take_has_music else take_path  # own folder: uploads share a file name
 
     sv, _ = librosa.load(song_vocal, sr=SR, mono=True)
     tv, _ = librosa.load(take_voice, sr=SR, mono=True)

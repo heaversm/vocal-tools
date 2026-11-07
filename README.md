@@ -1,10 +1,11 @@
 # Vocal tools
 
-Three audio tools on one local web page. Everything runs on your own machine. No accounts, no API keys, nothing uploaded.
+Audio tools on one local web page. Everything runs on your own machine. No accounts, no API keys, nothing uploaded.
 
 - **Split.** Drop a song, get the vocals and the instrumental as separate files. Uses [Demucs](https://github.com/facebookresearch/demucs).
 - **Convert.** Drop a *performance* (the melody, timing and delivery to keep) and a *target voice* (1–30 s of the voice it should sound like). You get the performance back in the target voice. Uses [Seed-VC](https://github.com/Plachtaa/seed-vc). Works for singing and speech.
 - **Sync.** Drop a song and a recording of you singing it. Your singing is lined up with the song and mixed over the instrumental. It matches by melody rather than lyrics, so it works in any language, in a different key or octave, and for a take that covers only part of the song. Each phrase is placed on its own, so rushed or stretched gaps between lines still land on time. It never changes your speed within a phrase.
+- **Pitch match.** Same inputs as Sync. After lining your take up, it tracks the pitch of your voice and the original singer's and scores how often you were on the note (within 50 cents, half a semitone), how far you typically missed, and whether you lean sharp or flat. A chart shows your pitch over the original melody. Singing in another key or octave isn't counted against you.
 
 ## Requirements
 
@@ -40,6 +41,7 @@ Every result is listed in the **Library** at the bottom of the page, with play, 
 |---|---|
 | Split a 30 s clip | about 8 s |
 | Sync a 15 s take to a 30 s song | about 16 s |
+| Pitch match the same | about 23 s |
 | Convert a 30 s clip, 30 steps | about 10 min |
 | Convert an 8 s clip, 10 steps | about 90 s |
 
@@ -52,7 +54,8 @@ Converting is much faster on an NVIDIA GPU. Fewer steps is faster and rougher.
 - Use **Shift semitones** when the target voice sits in a very different range, for example converting a male performance into a female voice.
 - The first conversion of each kind is slow while the models download.
 - Sync tells you if you sang in a different key, and flags a doubtful match (usually the wrong song). Tick **My recording has music in it** if you sang over a backing track, so the music is stripped first.
-- `sync.py` also runs from the command line: `.venv/bin/python sync.py song.mp3 take.m4a out/`
+- `sync.py` and `pitch.py` also run from the command line: `.venv/bin/python pitch.py song.mp3 take.m4a out/`
+- Pitch match compares against the song's separated vocal, so backing vocals and harmonies in the original can lower your score in those passages. A singer who deliberately takes a different melody scores low too.
 
 ## Changes to Seed-VC
 
