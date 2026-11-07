@@ -1,0 +1,64 @@
+# Vocal tools
+
+Two audio tools on one local web page. Everything runs on your own machine. No accounts, no API keys, nothing uploaded.
+
+- **Split.** Drop a song, get the vocals and the instrumental as separate files. Uses [Demucs](https://github.com/facebookresearch/demucs).
+- **Convert.** Drop a *performance* (the melody, timing and delivery to keep) and a *target voice* (1–30 s of the voice it should sound like). You get the performance back in the target voice. Uses [Seed-VC](https://github.com/Plachtaa/seed-vc). Works for singing and speech.
+
+## Requirements
+
+- macOS on Apple Silicon (tested on an M2) or Linux (untested). Windows isn't supported by the scripts.
+- Python 3.10 or 3.11: `brew install python@3.11`
+- ffmpeg: `brew install ffmpeg`
+- About 4 GB of disk: 1.2 GB of Python libraries from `setup.sh`, plus 2.4 GB of models that download the first time you use each tool. The models are not part of this repo.
+
+## Install
+
+```bash
+git clone https://github.com/heaversm/vocal-tools.git
+cd vocal-tools
+./setup.sh
+```
+
+`setup.sh` creates a Python environment in `.venv/` and downloads Seed-VC into `vendor/seed-vc/`, pinned to the version the included patch was written for.
+
+## Run
+
+On a Mac, open **Vocal Tools** from `~/Applications` (setup builds it; drag it to the Dock to keep it handy). Or double-click `start.command` in Finder, or run `./start.command`.
+
+It opens http://localhost:8010 and a Terminal window. The tools run while that window is open; close it or press Ctrl+C to stop. Opening the app again while it's running just reopens the page. If you move this folder, run `./make-app.sh` to rebuild the app.
+
+Results are saved in `data/`. The page also lets you play and download them.
+
+## Speed
+
+| Job | M2 Mac |
+|---|---|
+| Split a 30 s clip | about 8 s |
+| Convert a 30 s clip, 30 steps | about 10 min |
+| Convert an 8 s clip, 10 steps | about 90 s |
+
+Converting is much faster on an NVIDIA GPU. Fewer steps is faster and rougher.
+
+## Tips
+
+- Convert works best on clean, isolated vocals. Split a song first and use its vocals for both the performance and the target voice.
+- Untick **Singing** for speech. Ticked, the output follows the performance's pitch exactly. Unticked, the pitch moves toward the target voice's natural range.
+- Use **Shift semitones** when the target voice sits in a very different range, for example converting a male performance into a female voice.
+- The first conversion of each kind is slow while the models download.
+
+## Changes to Seed-VC
+
+`patches/seed-vc-apple-silicon.patch` changes three things in Seed-VC's `inference.py` so it runs on Apple GPUs. None of them affect NVIDIA or CPU machines:
+
+- Pitch data is converted to 32-bit floats, because Apple GPUs can't handle 64-bit.
+- The final audio stage (BigVGAN) runs on the CPU, because one of its operations is too large for Apple GPUs.
+- Audio passed to that stage is moved to whichever device it runs on.
+
+## Use responsibly
+
+Only convert into the voice of someone who has agreed to it, and respect the copyright of the recordings you use. Seed-VC can produce convincing results.
+
+## License
+
+MIT for the code in this repo (see `LICENSE`). Seed-VC is GPL-3.0 and Demucs is MIT. Neither is included here: `setup.sh` downloads them.

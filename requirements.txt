@@ -1,0 +1,17 @@
+# Shared by Demucs (split) and Seed-VC (convert). torch 2.5 is the oldest with mixed precision on Apple GPUs.
+torch==2.5.1
+torchaudio==2.5.1
+demucs==4.0.1
+scipy==1.13.1
+librosa==0.10.2
+huggingface-hub>=0.28.1
+munch==4.0.0
+einops==0.8.0
+descript-audio-codec==1.0.0
+transformers==4.46.3
+soundfile==0.12.1
+pydub==0.25.1
+numpy==1.26.4
+hydra-core==1.3.2
+pyyaml
+accelerate

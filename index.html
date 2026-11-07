@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Vocal tools</title>
+<style>
+  body { font: 16px/1.5 system-ui, sans-serif; max-width: 44rem; margin: 3rem auto; padding: 0 1rem; color: #222; }
+  h2 { margin-top: 3rem; }
+  .drop { border: 2px dashed #999; border-radius: 12px; padding: 2rem 1rem; text-align: center; cursor: pointer; }
+  .drop.over { border-color: #06c; background: #eef5ff; }
+  .drop.busy { opacity: .5; pointer-events: none; }
+  .drop.filled { border-style: solid; border-color: #3a3; }
+  .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+  .opts { display: flex; flex-wrap: wrap; gap: 1.25rem; align-items: center; margin: 1rem 0; }
+  .opts input[type=number] { width: 4rem; }
+  .result { margin-top: 1.5rem; padding: 1rem; border: 1px solid #ddd; border-radius: 8px; }
+  .result h3 { margin: 0 0 .5rem; font-size: 1rem; }
+  .row { display: flex; align-items: center; gap: .75rem; margin: .4rem 0; }
+  .row span { width: 7rem; }
+  audio { flex: 1; }
+  .error { color: #b00; }
+  .hint { color: #666; font-size: .9rem; }
+</style>
+</head>
+<body>
+<h1>Vocal tools</h1>
+<p class="hint">Everything runs on this machine. Nothing is uploaded anywhere else.</p>
+
+<h2>Split</h2>
+<p>Drop a song (mp3, wav, m4a, flac…) to get the vocals and the instrumental.</p>
+<div class="drop" id="split-drop">Drop a file here, or click to choose</div>
+<div id="split-results"></div>
+
+<h2>Convert</h2>
+<p>Drop a <b>performance</b> (the melody, timing and delivery to keep) and a <b>target voice</b> (1–30 s of the voice it should sound like). Works best on clean vocals, so split songs first.</p>
+<div class="pair">
+  <div class="drop" id="source-drop">Performance</div>
+  <div class="drop" id="target-drop">Target voice</div>
+</div>
+<div class="opts">
+  <label><input type="checkbox" id="singing" checked> Singing (keeps the performance's pitch)</label>
+  <label>Quality steps <input type="number" id="steps" value="30" min="1" max="100"></label>
+  <label>Shift semitones <input type="number" id="shift" value="0" min="-24" max="24"></label>
+  <button id="go" disabled>Convert</button>
+</div>
+<p class="hint">Slow without an NVIDIA GPU: on an M2 Mac a 30-second clip took about 10 minutes at 30 steps. Fewer steps is faster and rougher.</p>
+<div id="convert-results"></div>
+
+<script>
+function dropZone(el, onFile) {
+  const pick = document.createElement('input');
+  pick.type = 'file';
+  pick.accept = 'audio/*,video/*';
+  pick.hidden = true;
+  el.append(pick);
+  el.onclick = e => { if (e.target !== pick) pick.click(); };
+  pick.onchange = () => pick.files[0] && onFile(pick.files[0]);
+  el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
+  el.ondragleave = () => el.classList.remove('over');
+  el.ondrop = e => {
+    e.preventDefault();
+    el.classList.remove('over');
+    if (e.dataTransfer.files[0]) onFile(e.dataTransfer.files[0]);
+  };
+}
+
+function resultBox(parent, title, message) {
+  const box = document.createElement('div');
+  box.className = 'result';
+  box.innerHTML = '<h3></h3><p></p>';
+  box.querySelector('h3').textContent = title;
+  box.querySelector('p').textContent = message;
+  parent.prepend(box);
+  return box;
+}
+
+function addTrack(box, label, url, filename) {
+  const row = document.createElement('div');
+  row.className = 'row';
+  row.innerHTML = `<span>${label}</span><audio controls src="${url}"></audio><a>Download</a>`;
+  row.querySelector('a').href = url;
+  row.querySelector('a').download = filename;
+  box.append(row);
+}
+
+function fail(box, err) {
+  const p = box.querySelector('p');
+  p.className = 'error';
+  p.textContent = 'Failed: ' + err.message;
+}
+
+async function postFile(path, file) {
+  const res = await fetch(path, { method: 'POST', body: file, headers: { 'X-Filename': encodeURIComponent(file.name) } });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+const baseName = f => f.name.replace(/\.[^.]+$/, '');
+const seconds = t0 => Math.round((performance.now() - t0) / 1000);
+
+// Split
+const splitDrop = document.getElementById('split-drop');
+dropZone(splitDrop, async file => {
+  const box = resultBox(document.getElementById('split-results'), file.name, 'Separating…');
+  splitDrop.classList.add('busy');
+  const t0 = performance.now();
+  try {
+    const data = await postFile('/split', file);
+    box.querySelector('p').textContent = `Done in ${seconds(t0)} s.`;
+    addTrack(box, 'Vocals', data.vocals, `${baseName(file)} - vocals.wav`);
+    addTrack(box, 'Instrumental', data.instrumental, `${baseName(file)} - instrumental.wav`);
+  } catch (err) { fail(box, err); }
+  finally { splitDrop.classList.remove('busy'); }
+});
+
+// Convert
+const picked = { source: null, target: null };
+const go = document.getElementById('go');
+for (const key of ['source', 'target']) {
+  const el = document.getElementById(`${key}-drop`);
+  const label = el.firstChild.textContent;
+  dropZone(el, file => {
+    picked[key] = file;
+    el.firstChild.textContent = `${label}: ${file.name}`;
+    el.classList.add('filled');
+    go.disabled = !(picked.source && picked.target);
+  });
+}
+
+go.onclick = async () => {
+  const { source, target } = picked;
+  const box = resultBox(document.getElementById('convert-results'), `${source.name} → voice of ${target.name}`, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const [s, t] = await Promise.all([postFile('/upload', source), postFile('/upload', target)]);
+    const q = new URLSearchParams({
+      source: s.id, target: t.id,
+      singing: document.getElementById('singing').checked ? '1' : '0',
+      steps: document.getElementById('steps').value,
+      shift: document.getElementById('shift').value,
+    });
+    const res = await fetch('/convert?' + q, { method: 'POST' });
+    const { job, error } = await res.json();
+    if (!res.ok) throw new Error(error || res.statusText);
+    const p = box.querySelector('p');
+    while (true) {
+      p.textContent = `Converting… ${seconds(t0)} s so far.`;
+      await new Promise(r => setTimeout(r, 3000));
+      const st = await (await fetch('/status/' + job)).json();
+      if (st.state === 'failed') throw new Error(st.error);
+      if (st.state === 'done') {
+        p.textContent = `Done in ${seconds(t0)} s.`;
+        addTrack(box, 'Converted', st.converted, `${baseName(source)} - as ${baseName(target)}.wav`);
+        break;
+      }
+    }
+  } catch (err) { fail(box, err); }
+};
+</script>
+</body>
+</html>
