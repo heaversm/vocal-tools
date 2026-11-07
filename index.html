@@ -105,6 +105,17 @@
 <p class="hint">100% copies the original's pitch exactly, including its vibrato and slides, and sounds the most processed. Around 60–80% keeps more of your own expression.</p>
 <div id="tune-results"></div>
 
+<h2>Change key</h2>
+<p>Drop a <b>song</b> to move it up or down in pitch without changing its speed, for example to fit your range.</p>
+<div class="drop" id="key-drop">Song</div>
+<div class="opts">
+  <label>Semitones <input type="number" id="semitones" value="-2" min="-12" max="12" step="1"></label>
+  <label><input type="checkbox" id="key-inst" checked> Also give me the instrumental in the new key</label>
+  <button id="key-go" disabled>Change key</button>
+</div>
+<p class="hint">Not sure how far to move it? Pitch match tells you how many semitones above or below the original you naturally sang.</p>
+<div id="key-results"></div>
+
 <h2 id="library">Library</h2>
 <div class="lib-head">
   <div class="grow">
@@ -356,6 +367,22 @@ tuneGo.onclick = async () => {
     const st = await waitFor((await post('/tune?' + q)).job, box.querySelector('p'), t0, 'Lining up and tuning');
     const r = st.tune;
     showResult(box, st, `Done in ${seconds(t0)} s. On pitch: ${Math.round(r.before * 100)}% before, ${Math.round(r.after * 100)}% after. Typical correction ${r.typical_fix_cents} cents.`);
+  } catch (err) { fail(box, err); }
+};
+
+// ---------- key ----------
+const keyGo = $('key-go');
+const keyPicked = filePair(['key'], keyGo);
+keyGo.onclick = async () => {
+  const song = keyPicked.key;
+  const n = Number($('semitones').value);
+  const box = resultBox($('key-results'), `${song.name}, ${n > 0 ? '+' : ''}${n} semitones`, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const s = await postFile('/upload', song);
+    const q = new URLSearchParams({ song: s.id, semitones: n, inst: $('key-inst').checked ? '1' : '0' });
+    const st = await waitFor((await post('/key?' + q)).job, box.querySelector('p'), t0, 'Shifting');
+    showResult(box, st, `Done in ${seconds(t0)} s.`);
   } catch (err) { fail(box, err); }
 };
 

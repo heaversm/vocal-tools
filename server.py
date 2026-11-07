@@ -4,6 +4,7 @@
   Sync     - drop a song and a recording of someone singing it, get the singing lined up with the song (sync.py).
   Pitch    - same inputs as Sync, plus a score for how closely the singing follows the original melody (pitch.py).
   Tune     - same inputs again; pulls the singing onto the original singer's notes (tune.py).
+  Key      - drop a song, get it higher or lower at the same speed, optionally the instrumental too (key.py).
   Library  - every result, with play, download, delete, and a link to the folder on disk.
 
 Install once with ./setup.sh, then open the Vocal Tools app (or run ./start.command).
@@ -231,6 +232,25 @@ def run_tune(job, song, take, take_has_music, strength):
         remove(take_path.parent)
 
 
+def run_key(job, song, semitones, instrumental):
+    song_path, song_name = song
+    folder = RESULTS / job
+    try:
+        import key
+        key.change_key(song_path, semitones, folder, instrumental)
+        remove(folder / "work")
+        s, label = stem(song_name), f"{semitones:+g}"
+        files = [("Song", "shifted.wav", f"{s} ({label}).wav")]
+        if instrumental:
+            files.append(("Instrumental", "shifted_instrumental.wav", f"{s} - instrumental ({label}).wav"))
+        JOBS[job] = {"state": "done", **finish(job, "Key", f"{song_name}, {label} semitones", files)}
+    except Exception as e:
+        remove(folder)
+        JOBS[job] = {"state": "failed", "error": str(e)}
+    finally:
+        remove(song_path.parent)
+
+
 def start(target, *args):
     job = new_id()
     (RESULTS / job).mkdir(parents=True)
@@ -306,6 +326,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if url.path == "/tune":
                 return self.send(200, start(run_tune, *files, music, max(0.0, min(1.0, float(q.get("strength", 0.8))))))
             return self.send(200, start(run_sync if url.path == "/sync" else run_pitch, *files, music))
+
+        if url.path == "/key":
+            song = upload(q.get("song"))
+            if not song:
+                return self.send(400, {"error": "upload missing; drop the file again"})
+            semitones = max(-12.0, min(12.0, float(q.get("semitones", 0))))
+            return self.send(200, start(run_key, song, semitones, q.get("inst") == "1"))
 
         m = re.fullmatch(rf"/delete/({ID})", url.path)
         if m:
