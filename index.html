@@ -46,6 +46,18 @@
 <p class="hint">Slow without an NVIDIA GPU: on an M2 Mac a 30-second clip took about 10 minutes at 30 steps. Fewer steps is faster and rougher.</p>
 <div id="convert-results"></div>
 
+<h2>Sync</h2>
+<p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Your singing is lined up with the song, phrase by phrase, and mixed over the instrumental. It matches by melody, so any language works, and so does a different key or octave. It never speeds up or slows down your singing within a phrase.</p>
+<div class="pair">
+  <div class="drop" id="song-drop">Song</div>
+  <div class="drop" id="take-drop">Your singing</div>
+</div>
+<div class="opts">
+  <label><input type="checkbox" id="take-music"> My recording has music in it (strip it first)</label>
+  <button id="sync-go" disabled>Sync</button>
+</div>
+<div id="sync-results"></div>
+
 <script>
 function dropZone(el, onFile) {
   const pick = document.createElement('input');
@@ -114,19 +126,41 @@ dropZone(splitDrop, async file => {
   finally { splitDrop.classList.remove('busy'); }
 });
 
-// Convert
-const picked = { source: null, target: null };
-const go = document.getElementById('go');
-for (const key of ['source', 'target']) {
-  const el = document.getElementById(`${key}-drop`);
-  const label = el.firstChild.textContent;
-  dropZone(el, file => {
-    picked[key] = file;
-    el.firstChild.textContent = `${label}: ${file.name}`;
-    el.classList.add('filled');
-    go.disabled = !(picked.source && picked.target);
-  });
+function filePair(keys, button) {
+  const picked = {};
+  for (const key of keys) {
+    const el = document.getElementById(`${key}-drop`);
+    const label = el.firstChild.textContent;
+    dropZone(el, file => {
+      picked[key] = file;
+      el.firstChild.textContent = `${label}: ${file.name}`;
+      el.classList.add('filled');
+      button.disabled = !keys.every(k => picked[k]);
+    });
+  }
+  return picked;
 }
+
+async function startJob(path, params) {
+  const res = await fetch(path + '?' + new URLSearchParams(params), { method: 'POST' });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data.job;
+}
+
+async function waitFor(job, p, t0, verb) {
+  while (true) {
+    p.textContent = `${verb}… ${seconds(t0)} s so far.`;
+    await new Promise(r => setTimeout(r, 2000));
+    const st = await (await fetch('/status/' + job)).json();
+    if (st.state === 'failed') throw new Error(st.error);
+    if (st.state === 'done') return st;
+  }
+}
+
+// Convert
+const go = document.getElementById('go');
+const picked = filePair(['source', 'target'], go);
 
 go.onclick = async () => {
   const { source, target } = picked;
@@ -140,21 +174,40 @@ go.onclick = async () => {
       steps: document.getElementById('steps').value,
       shift: document.getElementById('shift').value,
     });
-    const res = await fetch('/convert?' + q, { method: 'POST' });
-    const { job, error } = await res.json();
-    if (!res.ok) throw new Error(error || res.statusText);
     const p = box.querySelector('p');
-    while (true) {
-      p.textContent = `Converting… ${seconds(t0)} s so far.`;
-      await new Promise(r => setTimeout(r, 3000));
-      const st = await (await fetch('/status/' + job)).json();
-      if (st.state === 'failed') throw new Error(st.error);
-      if (st.state === 'done') {
-        p.textContent = `Done in ${seconds(t0)} s.`;
-        addTrack(box, 'Converted', st.converted, `${baseName(source)} - as ${baseName(target)}.wav`);
-        break;
-      }
-    }
+    const st = await waitFor(await startJob('/convert', q), p, t0, 'Converting');
+    p.textContent = `Done in ${seconds(t0)} s.`;
+    addTrack(box, 'Converted', st.converted, `${baseName(source)} - as ${baseName(target)}.wav`);
+  } catch (err) { fail(box, err); }
+};
+
+// Sync
+const syncGo = document.getElementById('sync-go');
+const syncPicked = filePair(['song', 'take'], syncGo);
+
+function describe(r) {
+  const parts = [`Placed ${r.phrases_placed} phrase${r.phrases_placed === 1 ? '' : 's'}`];
+  if (r.phrases_skipped) parts.push(`left out ${r.phrases_skipped} that didn't match the song`);
+  if (r.key_shift) parts.push(`you sang ${Math.abs(r.key_shift)} semitone${Math.abs(r.key_shift) === 1 ? '' : 's'} ${r.key_shift > 0 ? 'higher' : 'lower'} than the original`);
+  if (r.offset_range > 0.15) parts.push(`your phrases needed moving by different amounts (up to ${r.offset_range} s apart)`);
+  let text = parts.join('; ') + '.';
+  if (r.match_cost > 0.35) text += ' The match looks doubtful: check that this is the right song.';
+  return text;
+}
+
+syncGo.onclick = async () => {
+  const { song, take } = syncPicked;
+  const box = resultBox(document.getElementById('sync-results'), `${take.name} → ${song.name}`, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const [s, t] = await Promise.all([postFile('/upload', song), postFile('/upload', take)]);
+    const p = box.querySelector('p');
+    const st = await waitFor(await startJob('/sync', {
+      song: s.id, take: t.id, music: document.getElementById('take-music').checked ? '1' : '0',
+    }), p, t0, 'Syncing');
+    p.textContent = `Done in ${seconds(t0)} s. ${describe(st.report)}`;
+    addTrack(box, 'Mix', st.mix, `${baseName(take)} - synced mix.wav`);
+    addTrack(box, 'Your vocal', st.vocal, `${baseName(take)} - synced vocal.wav`);
   } catch (err) { fail(box, err); }
 };
 </script>

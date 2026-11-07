@@ -1,6 +1,7 @@
 """Two local audio tools on one page, nothing leaves the machine:
   Split    - drop a song, get the vocals and the instrumental (Demucs).
   Convert  - drop a performance and a target voice, get the performance sung/spoken in that voice (Seed-VC).
+  Sync     - drop a song and a recording of someone singing it, get the singing lined up with the song (sync.py).
 
 Install once with ./setup.sh, then start with ./start.command (or double-click it in Finder).
 Uploads and results go in data/, which git ignores.
@@ -18,9 +19,10 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))  # for sync.py; start.command runs Python with -I, which leaves this folder out
 WORK = HERE / "data"
 SEED_VC = HERE / "vendor" / "seed-vc"
-FILES = {"vocals.wav", "no_vocals.wav", "converted.wav"}
+FILES = {"vocals.wav", "no_vocals.wav", "converted.wav", "synced_mix.wav", "synced_vocal.wav"}
 JOBS = {}  # job id -> {"state": "running" | "done" | "failed", ...}
 
 
@@ -70,6 +72,39 @@ def convert(job, source, target, singing, steps, shift):
         JOBS[job] = {"state": "failed", "error": str(e)}
 
 
+def run_sync(job, song, take, take_has_music):
+    try:
+        import sync  # librosa is slow to import, so only when needed
+        folder = WORK / job
+        report = sync.sync(song, take, folder, take_has_music)
+        shutil.rmtree(folder / "work")
+        JOBS[job] = {"state": "done", "report": report,
+                     "mix": f"/jobs/{job}/synced_mix.wav", "vocal": f"/jobs/{job}/synced_vocal.wav"}
+    except Exception as e:
+        JOBS[job] = {"state": "failed", "error": str(e)}
+
+
+def uploaded(q, keys):
+    """Paths of earlier /upload files named in the query string, or an error message."""
+    paths = {}
+    for key in keys:
+        if not re.fullmatch(r"[0-9a-f]{32}", q.get(key, "")):
+            return None, f"missing {key}"
+        found = list((WORK / q[key]).glob("input.*"))
+        if not found:
+            return None, f"{key} not found"
+        paths[key] = found[0]
+    return paths, None
+
+
+def start(target, *args):
+    job = uuid.uuid4().hex
+    (WORK / job).mkdir(parents=True)
+    JOBS[job] = {"state": "running"}
+    threading.Thread(target=target, args=(job, *args), daemon=True).start()
+    return {"job": job}
+
+
 class Handler(http.server.BaseHTTPRequestHandler):
     def send(self, code, body, kind="application/json"):
         if isinstance(body, dict):
@@ -113,23 +148,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 return self.send(400, {"error": "empty upload"})
             job, _ = save_upload(data, self.headers.get("X-Filename", "upload"))
             return self.send(200, {"id": job})
+        q = {k: v[0] for k, v in parse_qs(url.query).items()}
         if url.path == "/convert":
-            q = {k: v[0] for k, v in parse_qs(url.query).items()}
-            paths = {}
-            for key in ("source", "target"):
-                if not re.fullmatch(r"[0-9a-f]{32}", q.get(key, "")):
-                    return self.send(400, {"error": f"missing {key}"})
-                found = list((WORK / q[key]).glob("input.*"))
-                if not found:
-                    return self.send(400, {"error": f"{key} not found"})
-                paths[key] = found[0]
-            job = uuid.uuid4().hex
-            (WORK / job).mkdir(parents=True)
-            JOBS[job] = {"state": "running"}
-            args = (job, paths["source"], paths["target"], q.get("singing") == "1",
-                    max(1, min(100, int(q.get("steps", 30)))), max(-24, min(24, int(q.get("shift", 0)))))
-            threading.Thread(target=convert, args=args, daemon=True).start()
-            return self.send(200, {"job": job})
+            paths, err = uploaded(q, ("source", "target"))
+            if err:
+                return self.send(400, {"error": err})
+            return self.send(200, start(convert, paths["source"], paths["target"], q.get("singing") == "1",
+                                        max(1, min(100, int(q.get("steps", 30)))), max(-24, min(24, int(q.get("shift", 0))))))
+        if url.path == "/sync":
+            paths, err = uploaded(q, ("song", "take"))
+            if err:
+                return self.send(400, {"error": err})
+            return self.send(200, start(run_sync, paths["song"], paths["take"], q.get("music") == "1"))
         self.send(404, {"error": "not found"})
 
 
