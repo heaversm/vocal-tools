@@ -49,6 +49,7 @@
 
 <h2>Split</h2>
 <p>Drop a song (mp3, wav, m4a, flac…) to get the vocals and the instrumental.</p>
+<div class="opts"><label><input type="checkbox" id="four"> Four parts: vocals, drums, bass and everything else</label></div>
 <div class="drop" id="split-drop">Drop a file here, or click to choose</div>
 <div id="split-results"></div>
 
@@ -115,6 +116,14 @@
 </div>
 <p class="hint">Not sure how far to move it? Pitch match tells you how many semitones above or below the original you naturally sang.</p>
 <div id="key-results"></div>
+
+<h2>Lyrics timing</h2>
+<p>Drop a <b>song</b> to get its lyrics timed word by word, as LRC (karaoke players) and SRT (video subtitles) files.</p>
+<div class="drop" id="lsong-drop">Song</div>
+<p><textarea id="lyrics-text" rows="6" style="width:100%;font:inherit" placeholder="Optional, and much more accurate: paste the real lyrics here, one line per line."></textarea></p>
+<div class="opts"><button id="lyrics-go" disabled>Time the lyrics</button></div>
+<p class="hint">Without lyrics it uses what Whisper hears, which on singing is often wrong. With English lyrics pasted, each word is pinned precisely in clips up to about 40 s; in longer songs some words can be a few seconds off.</p>
+<div id="lyrics-results"></div>
 
 <h2 id="library">Library</h2>
 <div class="lib-head">
@@ -184,7 +193,8 @@ function showResult(box, meta, message) {
     row.className = 'row';
     row.innerHTML = '<span></span><audio controls></audio><a>Download</a>';
     row.querySelector('span').textContent = f.label;
-    row.querySelector('audio').src = fileUrl(meta.id, f);
+    if (f.file.endsWith('.wav')) row.querySelector('audio').src = fileUrl(meta.id, f);
+    else row.querySelector('audio').replaceWith(document.createElement('span'));
     row.querySelector('a').href = fileUrl(meta.id, f);
     row.querySelector('a').download = f.download;
     box.append(row);
@@ -223,7 +233,7 @@ dropZone(splitDrop, async file => {
   splitDrop.classList.add('busy');
   const t0 = performance.now();
   try {
-    showResult(box, await postFile('/split', file), `Done in ${seconds(t0)} s.`);
+    showResult(box, await postFile('/split?four=' + ($('four').checked ? '1' : '0'), file), `Done in ${seconds(t0)} s.`);
   } catch (err) { fail(box, err); }
   finally { splitDrop.classList.remove('busy'); }
 });
@@ -386,6 +396,25 @@ keyGo.onclick = async () => {
   } catch (err) { fail(box, err); }
 };
 
+// ---------- lyrics ----------
+const lyricsGo = $('lyrics-go');
+const lyricsPicked = filePair(['lsong'], lyricsGo);
+lyricsGo.onclick = async () => {
+  const song = lyricsPicked.lsong;
+  const box = resultBox($('lyrics-results'), song.name, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const s = await postFile('/upload', song);
+    const job = (await post('/lyrics?song=' + s.id, $('lyrics-text').value)).job;
+    const st = await waitFor(job, box.querySelector('p'), t0, 'Listening');
+    const pre = document.createElement('pre');
+    pre.style.cssText = 'white-space:pre-wrap;font-size:.85rem;background:#f6f6f6;padding:.6rem;border-radius:6px';
+    pre.textContent = st.lyrics.lines.map(l => `${l.start.toFixed(2).padStart(7)}  ${l.words.map(w => w.w).join(' ')}`).join('\n');
+    showResult(box, st, `Done in ${seconds(t0)} s. Timed from ${st.lyrics.method}.`);
+    box.querySelector('p').after(pre);
+  } catch (err) { fail(box, err); }
+};
+
 // ---------- library ----------
 const player = new Audio();
 let playingButton = null;
@@ -439,7 +468,7 @@ function renderLibrary(lib) {
       dl.download = f.download;
       dl.title = `Download ${f.label}`;
       dl.textContent = '⬇';
-      wrap.append(play, dl, document.createTextNode(f.label));
+      wrap.append(...(f.file.endsWith('.wav') ? [play] : []), dl, document.createTextNode(f.label));
       info.querySelector('.files').append(wrap);
     }
     const actions = tr.insertCell();

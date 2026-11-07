@@ -2,19 +2,20 @@
 
 Audio tools on one local web page. Everything runs on your own machine. No accounts, no API keys, nothing uploaded.
 
-- **Split.** Drop a song, get the vocals and the instrumental as separate files. Uses [Demucs](https://github.com/facebookresearch/demucs).
+- **Split.** Drop a song, get the vocals and the instrumental as separate files, or four parts: vocals, drums, bass and everything else. Uses [Demucs](https://github.com/facebookresearch/demucs).
 - **Convert.** Drop a *performance* (the melody, timing and delivery to keep) and a *target voice* (1–30 s of the voice it should sound like). You get the performance back in the target voice. Uses [Seed-VC](https://github.com/Plachtaa/seed-vc). Works for singing and speech.
 - **Sync.** Drop a song and a recording of you singing it. Your singing is lined up with the song and mixed over the instrumental. It matches by melody rather than lyrics, so it works in any language, in a different key or octave, and for a take that covers only part of the song. Each phrase is placed on its own, so rushed or stretched gaps between lines still land on time. It never changes your speed within a phrase.
 - **Pitch match.** Same inputs as Sync. After lining your take up, it tracks the pitch of your voice and the original singer's and scores how often you were on the note (within 50 cents, half a semitone), how far you typically missed, and whether you lean sharp or flat. A chart shows your pitch over the original melody. Singing in another key or octave isn't counted against you.
 - **Tune to original.** Same inputs again. It pulls your pitch toward the original singer's notes, moment by moment, with a strength control, keeping your voice and timing. Re-synthesis uses the [WORLD](https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder) vocoder. It reports your on-pitch score before and after. It helps off-pitch takes (a real cover went from 62% to 79% at 80% strength) and does nothing for takes that are already accurate.
 - **Change key.** Drop a song and choose how many semitones to move it, up or down. The speed stays the same. You can also get the instrumental in the new key, for singing along. Uses [Rubber Band](https://breakfastquay.com/rubberband/) through Spotify's [pedalboard](https://github.com/spotify/pedalboard).
+- **Lyrics timing.** Drop a song, optionally paste its lyrics, and get them timed word by word as LRC (line and word level, for karaoke players) and SRT (subtitles). Uses [faster-whisper](https://github.com/SYSTRAN/faster-whisper), plus forced alignment for English when you paste lyrics. Limits: without pasted lyrics it's only as good as what Whisper hears, which on singing is often wrong. With pasted English lyrics, clips up to about 40 s are precise (within 20 ms of hand-checked timings on a test clip); in longer songs some words can be a few seconds off.
 
 ## Requirements
 
 - macOS on Apple Silicon (tested on an M2) or Linux (untested). Windows isn't supported by the scripts.
 - Python 3.10 or 3.11: `brew install python@3.11`
 - ffmpeg: `brew install ffmpeg`
-- About 4 GB of disk: 1.2 GB of Python libraries from `setup.sh`, plus 2.4 GB of models that download the first time you use each tool. The models are not part of this repo.
+- About 4.5 GB of disk: 1.2 GB of Python libraries from `setup.sh`, plus about 3 GB of models that download the first time you use each tool (Seed-VC 2.3 GB, Whisper small about 0.5 GB, the rest smaller). The models are not part of this repo.
 
 ## Install
 
@@ -46,6 +47,8 @@ Every result is listed in the **Library** at the bottom of the page, with play, 
 | Pitch match the same | about 23 s |
 | Tune the same | about 35 s |
 | Change the key of a 30 s song, with instrumental | about 16 s |
+| Split a 30 s song into four parts | about 14 s |
+| Time the lyrics of a 30 s song | about 20 s |
 | Convert a 30 s clip, 30 steps | about 10 min |
 | Convert an 8 s clip, 10 steps | about 90 s |
 

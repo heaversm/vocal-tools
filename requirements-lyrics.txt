@@ -1,0 +1,4 @@
+# Installed after requirements.txt, as a separate step. faster-whisper's onnxruntime needs protobuf>=4.25,
+# while descript-audiotools (pulled in by Seed-VC) still pins protobuf<3.20. Seed-VC works with the newer
+# protobuf (checked with a conversion), but pip's resolver refuses the pair in one install.
+faster-whisper==1.1.1

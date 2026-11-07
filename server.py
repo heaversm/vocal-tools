@@ -5,6 +5,7 @@
   Pitch    - same inputs as Sync, plus a score for how closely the singing follows the original melody (pitch.py).
   Tune     - same inputs again; pulls the singing onto the original singer's notes (tune.py).
   Key      - drop a song, get it higher or lower at the same speed, optionally the instrumental too (key.py).
+  Lyrics   - drop a song (and optionally paste its lyrics), get word-timed LRC/SRT files (lyrics.py).
   Library  - every result, with play, download, delete, and a link to the folder on disk.
 
 Install once with ./setup.sh, then open the Vocal Tools app (or run ./start.command).
@@ -119,18 +120,22 @@ def last_line(text, fallback):
     return lines[-1] if lines else fallback
 
 
-def split(data, filename):
+FOUR = [("Vocals", "vocals"), ("Drums", "drums"), ("Bass", "bass"), ("Other", "other")]
+
+
+def split(data, filename, four=False):
     job = new_id()
     folder = RESULTS / job
     folder.mkdir(parents=True)
     src = folder / f"input{Path(filename).suffix.lower() or '.audio'}"
     src.write_bytes(data)
     try:
-        r = subprocess.run([sys.executable, "-m", "demucs", "--two-stems=vocals", "-n", "htdemucs", "-o", str(folder), str(src)],
+        stems = [] if four else ["--two-stems=vocals"]
+        r = subprocess.run([sys.executable, "-m", "demucs", *stems, "-n", "htdemucs", "-o", str(folder), str(src)],
                            capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError(last_line(r.stderr, "Demucs failed"))
-        for name in ("vocals.wav", "no_vocals.wav"):
+        for name in ([f"{n}.wav" for _, n in FOUR] if four else ["vocals.wav", "no_vocals.wav"]):
             shutil.move(folder / "htdemucs" / "input" / name, folder / name)
     except Exception:
         remove(folder)
@@ -138,6 +143,8 @@ def split(data, filename):
     remove(folder / "htdemucs")
     src.unlink()
     s = stem(filename)
+    if four:
+        return finish(job, "Split", filename, [(l, f"{n}.wav", f"{s} - {n}.wav") for l, n in FOUR], "four parts")
     return finish(job, "Split", filename, [("Vocals", "vocals.wav", f"{s} - vocals.wav"),
                                            ("Instrumental", "no_vocals.wav", f"{s} - instrumental.wav")])
 
@@ -251,6 +258,25 @@ def run_key(job, song, semitones, instrumental):
         remove(song_path.parent)
 
 
+def run_lyrics(job, song, text):
+    song_path, song_name = song
+    folder = RESULTS / job
+    try:
+        import lyrics
+        r = lyrics.lyrics_timing(song_path, folder, text)
+        remove(folder / "work")
+        s = stem(song_name)
+        meta = finish(job, "Lyrics", song_name,
+                      [("LRC", "lyrics.lrc", f"{s}.lrc"), ("Word LRC", "lyrics_words.lrc", f"{s} (words).lrc"),
+                       ("SRT", "lyrics.srt", f"{s}.srt")], r["method"])
+        JOBS[job] = {"state": "done", "lyrics": r, **meta}
+    except Exception as e:
+        remove(folder)
+        JOBS[job] = {"state": "failed", "error": str(e)}
+    finally:
+        remove(song_path.parent)
+
+
 def start(target, *args):
     job = new_id()
     (RESULTS / job).mkdir(parents=True)
@@ -289,9 +315,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
         if url.path == "/library":
             return self.send(200, library())
-        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.(wav|json))", url.path)
+        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.(wav|json|lrc|srt))", url.path)
         if m and m.group(2) != "meta.json" and (RESULTS / m.group(1) / m.group(2)).is_file():
-            kind = "audio/wav" if m.group(3) == "wav" else "application/json"
+            kind = {"wav": "audio/wav", "json": "application/json"}.get(m.group(3), "text/plain; charset=utf-8")
             return self.send(200, (RESULTS / m.group(1) / m.group(2)).read_bytes(), kind)
         m = re.fullmatch(rf"/status/({ID})", url.path)
         if m and m.group(1) in JOBS:
@@ -309,7 +335,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if url.path == "/upload":  # held for /convert or /sync
                 return self.send(200, {"id": save_upload(data, self.filename())})
             try:
-                return self.send(200, split(data, self.filename()))
+                return self.send(200, split(data, self.filename(), q.get("four") == "1"))
             except Exception as e:
                 return self.send(500, {"error": str(e)})
 
@@ -326,6 +352,12 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if url.path == "/tune":
                 return self.send(200, start(run_tune, *files, music, max(0.0, min(1.0, float(q.get("strength", 0.8))))))
             return self.send(200, start(run_sync if url.path == "/sync" else run_pitch, *files, music))
+
+        if url.path == "/lyrics":
+            song = upload(q.get("song"))
+            if not song:
+                return self.send(400, {"error": "upload missing; drop the file again"})
+            return self.send(200, start(run_lyrics, song, self.body().decode("utf-8", "replace")))
 
         if url.path == "/key":
             song = upload(q.get("song"))

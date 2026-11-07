@@ -38,6 +38,9 @@ fi
 .venv/bin/pip install --quiet --upgrade pip
 echo "Installing libraries (a few GB)..."
 .venv/bin/pip install --quiet -r requirements.txt
+# Second step on purpose: see the note in requirements-lyrics.txt. pip warns about descript-audiotools
+# and protobuf here; that's expected and harmless.
+.venv/bin/pip install --quiet -r requirements-lyrics.txt
 
 ./make-app.sh
 
