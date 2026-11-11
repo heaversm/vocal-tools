@@ -131,7 +131,7 @@ def split(data, filename, four=False):
     src.write_bytes(data)
     try:
         stems = [] if four else ["--two-stems=vocals"]
-        r = subprocess.run([sys.executable, "-m", "demucs", *stems, "-n", "htdemucs", "-o", str(folder), str(src)],
+        r = subprocess.run([sys.executable, "-m", "demucs", "-d", "cpu", *stems, "-n", "htdemucs", "-o", str(folder), str(src)],
                            capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError(last_line(r.stderr, "Demucs failed"))

@@ -34,7 +34,7 @@ def separate(path, work):
     work.mkdir(parents=True, exist_ok=True)
     out = work / "htdemucs" / Path(path).stem
     if not (out / "vocals.wav").exists():
-        r = subprocess.run([sys.executable, "-m", "demucs", "--two-stems=vocals", "-n", "htdemucs",
+        r = subprocess.run([sys.executable, "-m", "demucs", "-d", "cpu", "--two-stems=vocals", "-n", "htdemucs",
                             "-o", str(work), str(path)], capture_output=True, text=True)
         if r.returncode != 0:
             raise RuntimeError("Demucs failed: " + (r.stderr.strip().splitlines() or ["?"])[-1])
