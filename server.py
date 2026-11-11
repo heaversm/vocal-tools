@@ -313,6 +313,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
         url = urlparse(self.path)
         if url.path in ("/", "/index.html"):
             return self.send(200, (HERE / "index.html").read_bytes(), "text/html; charset=utf-8")
+        if url.path in ("/about", "/about.html"):
+            return self.send(200, (HERE / "about.html").read_bytes(), "text/html; charset=utf-8")
         if url.path == "/library":
             return self.send(200, library())
         m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.(wav|json|lrc|srt))", url.path)

@@ -7,5 +7,5 @@ if [ "$(uname)" != "Darwin" ]; then echo "The app is macOS-only. Use ./start.com
 APP="$HOME/Applications/Vocal Tools.app"
 mkdir -p "$HOME/Applications"
 rm -rf "$APP"
-osacompile -o "$APP" -e "do shell script \"open -a Terminal \" & quoted form of \"$PWD/start.command\""
+osacompile -o "$APP" -e "do shell script quoted form of \"$PWD/start.command\" & \" >/dev/null 2>&1 &\""
 echo "Built $APP (drag it to the Dock to keep it handy)."

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>About · Vocal Tools</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎤</text></svg>">
+<style>
+  /* Same palette and header as index.html. */
+  :root {
+    --bg-deep: #07060d; --bg-mid: #1a0f2e; --bg-glow: #4b1d6e;
+    --pink: #ff2e93; --pink-soft: #ff7ad9;
+    --text: #fff; --text-dim: #cfc8ea; --text-faint: #8f88ad;
+    --panel: rgba(255, 255, 255, .05); --panel-2: rgba(255, 255, 255, .08); --line: rgba(255, 255, 255, .14);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; scroll-padding-top: 76px; }
+  body { margin: 0; font: 16px/1.6 system-ui, -apple-system, sans-serif; color: var(--text); background: var(--bg-deep); min-height: 100vh; }
+  body::before { content: ""; position: fixed; inset: 0; z-index: -1;
+    background: radial-gradient(ellipse at 50% 120%, var(--bg-glow) 0%, var(--bg-mid) 45%, var(--bg-deep) 100%); }
+  a { color: var(--pink-soft); }
+  b { color: #fff; }
+  p, li { color: var(--text-dim); }
+  p { margin: .4rem 0 1rem; }
+  .top { position: sticky; top: 0; z-index: 5; backdrop-filter: blur(14px); background: rgba(7, 6, 13, .7); border-bottom: 1px solid var(--line); }
+  .top-inner { max-width: 920px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+  .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; color: #fff; }
+  .logo-mic { display: grid; place-items: center; width: 38px; height: 38px; border-radius: 50%; font-size: 18px;
+    background: radial-gradient(circle at 35% 30%, #ff8fc8, var(--pink) 60%, #a3105c); box-shadow: 0 0 18px rgba(255, 46, 147, .5); }
+  .wordmark { font-size: 19px; font-weight: 900; letter-spacing: -.01em; }
+  nav { display: flex; gap: 4px; flex-wrap: wrap; margin-left: auto; }
+  nav a { color: var(--text-dim); text-decoration: none; font-size: 14px; font-weight: 600; padding: 6px 11px; border-radius: 999px; }
+  nav a:hover, nav a.here { background: var(--panel-2); color: #fff; }
+
+  main { max-width: 760px; margin: 0 auto; padding: 36px 24px 100px; }
+  h1 { font-size: 40px; line-height: 1.1; font-weight: 900; margin: 0 0 12px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 22px 24px; margin-top: 22px; }
+  .card h2 { font-size: 22px; font-weight: 900; margin: 0 0 6px; }
+  .card h3 { font-size: 16px; font-weight: 800; margin: 18px 0 2px; }
+  .eyebrow { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--pink-soft); font-weight: 700; margin-bottom: 2px; }
+  pre { background: rgba(0, 0, 0, .35); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; overflow-x: auto; margin: 6px 0 14px; }
+  code { font: 13.5px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; color: #fff; }
+  p code, li code { background: rgba(0, 0, 0, .3); padding: 1px 6px; border-radius: 6px; color: var(--text-dim); }
+  .tool { border-top: 1px solid var(--line); padding-top: 14px; margin-top: 16px; }
+  .tool:first-of-type { border-top: 0; padding-top: 0; }
+  .how { font-size: 15px; color: var(--text-faint); }
+  ul { padding-left: 1.2rem; margin: .2rem 0 1rem; }
+  footer { text-align: center; color: var(--text-faint); font-size: 13px; margin-top: 40px; }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="top-inner">
+    <a class="logo" href="/"><span class="logo-mic">🎤</span><span class="wordmark">Vocal Tools</span></a>
+    <nav><a href="/">Tools</a><a href="#start">Get started</a><a href="#uses">What it uses</a><a class="here" href="/about">About</a></nav>
+  </div>
+</header>
+
+<main>
+<h1>About Vocal Tools</h1>
+<p>These tools were assembled from various audio tools and libraries in order to build the <a href="https://karaokecaptcha.netlify.app">Karaoke Captcha prototype</a>. I figured I'd make them accessible to others for their own purposes.</p>
+<p>Everything runs on your own machine. No accounts, no API keys, nothing uploaded.</p>
+
+<section class="card" id="start">
+  <div class="eyebrow">Get started</div>
+  <h2>Install and run</h2>
+
+  <h3>Install</h3>
+  <p>You need a Mac with Apple Silicon (Linux may work, untested), Python 3.10 or 3.11, ffmpeg, and about 4.5 GB of disk. Clone the repo and follow the instructions on <a href="https://github.com/heaversm/vocal-tools">GitHub</a>:</p>
+<pre><code>git clone https://github.com/heaversm/vocal-tools.git
+cd vocal-tools
+./setup.sh</code></pre>
+
+  <h3>Run</h3>
+  <p>On a Mac, open <b>Vocal Tools</b> from <code>~/Applications</code> (setup builds it; drag it to the Dock to keep it handy). Or double-click <code>start.command</code> in Finder, or run <code>./start.command</code>. It opens <a href="http://localhost:8010">http://localhost:8010</a> in your browser.</p>
+  <p>The tools run quietly in the background: they start when you log in and restart themselves if they crash. To stop them, run <code>./service.sh stop</code>.</p>
+</section>
+
+<section class="card" id="uses">
+  <div class="eyebrow">Under the hood</div>
+  <h2>What it uses</h2>
+
+  <div class="tool">
+    <p><b>Split.</b> Drop a song, get the vocals and the instrumental as separate files, or four parts: vocals, drums, bass and everything else. Uses <a href="https://github.com/adefossez/demucs">Demucs</a>, a state-of-the-art music source separation model that runs on your machine.</p>
+    <p class="how">How: Demucs v4 (the <code>htdemucs</code> model) is a Hybrid Transformer. It looks at the sound two ways at once, as a waveform and as a spectrogram (a picture of which frequencies are playing when), and a Transformer in the middle lets the two views inform each other.</p>
+  </div>
+
+  <div class="tool">
+    <p><b>Convert.</b> Drop a <i>performance</i> (the melody, timing and delivery to keep) and a <i>target voice</i> (1–30 s of the voice it should sound like). You get the performance back in the target voice. Uses <a href="https://github.com/Plachtaa/seed-vc">Seed-VC</a>, a zero-shot voice conversion model that runs on your machine. Works for singing and speech.</p>
+    <p class="how">How: "zero-shot" means it needs no training on the target voice, just the short sample. A small patch included in the repo lets it run on Apple's GPUs.</p>
+  </div>
+
+  <div class="tool">
+    <p><b>Sync.</b> Drop a song and a recording of you singing it. Your singing is lined up with the song and mixed over the instrumental. It matches by melody rather than lyrics, so it works in any language, in a different key or octave, and for a take that covers only part of the song.</p>
+    <p class="how">How: Demucs pulls the singer's vocal out of the song. Both vocals are turned into a sequence of which of the 12 notes is sounding, with <a href="https://librosa.org">librosa</a>, so octave doesn't matter. Dynamic time warping, a standard way to match two sequences that run at different speeds, finds where your take sits in the song. Each phrase is then placed on its own, without stretching your timing.</p>
+  </div>
+
+  <div class="tool">
+    <p><b>Pitch match.</b> Same inputs as Sync. After lining your take up, it tracks the pitch of your voice and the original singer's and scores how often you were on the note, how far you typically missed, and whether you lean sharp or flat. A chart shows your pitch over the original melody.</p>
+    <p class="how">How: pitch is tracked every 23 ms with librosa's pYIN pitch tracker. "On the note" means within 50 cents (half a semitone), measured against the melody moved into your key and octave.</p>
+  </div>
+
+  <div class="tool">
+    <p><b>Tune to original.</b> Same inputs again. It pulls your pitch toward the original singer's notes, moment by moment, with a strength control, keeping your voice and timing. Re-synthesis uses the <a href="https://github.com/JeremyCCHsu/Python-Wrapper-for-World-Vocoder">WORLD</a> vocoder, a fast and high-quality vocoder which parameterizes speech into three components:</p>
+    <ul>
+      <li><code>f0</code>: pitch contour</li>
+      <li><code>sp</code>: harmonic spectral envelope</li>
+      <li><code>ap</code>: aperiodic spectral envelope (relative to the harmonic spectral envelope)</li>
+    </ul>
+    <p class="how">How: only <code>f0</code>, the pitch, is changed. The other two carry the character of your voice, so it still sounds like you.</p>
+  </div>
+
+  <div class="tool">
+    <p><b>Change key.</b> Drop a song and choose how many semitones to move it, up or down. The speed stays the same. You can also get the instrumental in the new key, for singing along. Uses <a href="https://breakfastquay.com/rubberband/">Rubber Band</a>, a software library for audio time-stretching and pitch-shifting. It lets you change the tempo and pitch of a recording independently of one another. It's used here through Spotify's <a href="https://github.com/spotify/pedalboard">pedalboard</a> audio tools suite.</p>
+  </div>
+
+  <div class="tool">
+    <p><b>Lyrics timing.</b> Drop a song, optionally paste its lyrics, and get them timed word by word as LRC (line and word level, for karaoke players) and SRT (subtitles). Uses <a href="https://github.com/SYSTRAN/faster-whisper">faster-whisper</a>, a reimplementation of OpenAI's Whisper model using <a href="https://github.com/OpenNMT/CTranslate2/">CTranslate2</a> (up to 4 times faster than OpenAI's version), plus forced alignment for English when you paste lyrics.</p>
+    <p class="how">How: Whisper's own word timings on singing can be seconds off. When you paste the lyrics, a speech model (<a href="https://huggingface.co/facebook/wav2vec2-base-960h">wav2vec 2.0</a>) scores, moment by moment, how likely each letter is. Forced alignment then finds the one path through those scores that spells your lyrics in order, which gives every word a start and end time.</p>
+  </div>
+</section>
+
+<footer>Code and install instructions on <a href="https://github.com/heaversm/vocal-tools">GitHub</a> · Built while making <a href="https://karaokecaptcha.netlify.app">Karaoke Captcha</a></footer>
+</main>
+</body>
+</html>

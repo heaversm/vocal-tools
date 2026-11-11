@@ -43,6 +43,7 @@ echo "Installing libraries (a few GB)..."
 .venv/bin/pip install --quiet -r requirements-lyrics.txt
 
 ./make-app.sh
+if [ "$(uname)" = "Darwin" ]; then ./service.sh install; fi
 
 echo
-echo "Done. Open Vocal Tools from ~/Applications, or run ./start.command"
+echo "Done. Open Vocal Tools from ~/Applications, or go to http://localhost:8010"

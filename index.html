@@ -23,6 +23,7 @@
   a { color: var(--pink-soft); }
   b { color: #fff; }
   p { color: var(--text-dim); margin: .4rem 0 1rem; }
+  p.what { color: var(--text); font-size: 1.05em; margin-bottom: .3rem; }
   .hint { color: var(--text-faint); font-size: 14px; }
   .error { color: var(--red); }
   [hidden] { display: none !important; }
@@ -117,7 +118,7 @@
     <a class="logo" href="#"><span class="logo-mic">🎤</span><span class="wordmark">Vocal Tools</span></a>
     <nav>
       <a href="#split">Split</a><a href="#convert">Convert</a><a href="#sync">Sync</a><a href="#pitch">Pitch</a>
-      <a href="#tune">Tune</a><a href="#key">Key</a><a href="#lyrics">Lyrics</a><a href="#library">Library</a>
+      <a href="#tune">Tune</a><a href="#key">Key</a><a href="#lyrics">Lyrics</a><a href="#library">Library</a><a href="/about">About</a>
     </nav>
   </div>
 </header>
@@ -131,7 +132,8 @@
 <section class="tool" id="split">
   <div class="eyebrow">Separate</div>
   <h2>Split</h2>
-  <p>Drop a song (mp3, wav, m4a, flac…) to get the vocals and the instrumental.</p>
+  <p class="what">Takes a song apart: the singing on its own, and the music on its own.</p>
+  <p>Drop a song (mp3, wav, m4a, flac…). Tick four parts to also separate the drums and bass.</p>
   <div class="opts"><label><input type="checkbox" id="four"> Four parts: vocals, drums, bass and everything else</label></div>
   <div class="drop" id="split-drop">Song</div>
   <div id="split-results"></div>
@@ -140,7 +142,8 @@
 <section class="tool" id="convert">
   <div class="eyebrow">Change the voice</div>
   <h2>Convert</h2>
-  <p>Drop a <b>performance</b> (the melody, timing and delivery to keep) and a <b>target voice</b> (1–30 s of the voice it should sound like). Works best on clean vocals, so split songs first.</p>
+  <p class="what">A voice costume. You sing something, give it a short sample of someone else's voice, and it sounds like they sang it. Your tune and timing stay the same.</p>
+  <p>Drop your singing as the <b>performance</b>, and 1–30 s of the other voice as the <b>target voice</b>. Both work best as clean vocals with no music, so split songs first.</p>
   <div class="pair">
     <div class="drop" id="source-drop">Performance</div>
     <div class="drop" id="target-drop">Target voice</div>
@@ -158,7 +161,8 @@
 <section class="tool" id="sync">
   <div class="eyebrow">Line up</div>
   <h2>Sync</h2>
-  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Your singing is lined up with the song, phrase by phrase, and mixed over the instrumental. It matches by melody, so any language works, and so does a different key or octave. It never speeds up or slows down your singing within a phrase.</p>
+  <p class="what">Lines your singing up with the real song so it lands on the beat, then plays your voice over the song's music.</p>
+  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. It works in any language, in a different key, or if you only sang part of the song. Each line is moved into place on its own; your singing is never sped up or slowed down.</p>
   <div class="pair">
     <div class="drop" id="song-drop">Song</div>
     <div class="drop" id="take-drop">Your singing</div>
@@ -173,7 +177,8 @@
 <section class="tool" id="pitch">
   <div class="eyebrow">Score</div>
   <h2>Pitch match</h2>
-  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Your take is lined up with the song (as in Sync), then scored on how closely you followed the original singer's melody. Singing it in another key or octave isn't counted against you.</p>
+  <p class="what">A score card for your singing: how often you hit the right notes, whether you sing too high or too low, and a chart of your notes next to the singer's. It doesn't change your recording.</p>
+  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Singing in a different key isn't counted against you.</p>
   <div class="pair">
     <div class="drop" id="psong-drop">Song</div>
     <div class="drop" id="ptake-drop">Your singing</div>
@@ -188,7 +193,8 @@
 <section class="tool" id="tune">
   <div class="eyebrow">Correct</div>
   <h2>Tune to original</h2>
-  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Your take is lined up, then each moment of your pitch is pulled toward the original singer's note: auto-tune toward that exact melody, in your own key and octave. Your voice and timing stay yours.</p>
+  <p class="what">Auto-tune aimed at the real singer's notes. It nudges your off notes toward theirs, and it still sounds like you.</p>
+  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Strength sets how hard it nudges. Your timing doesn't change, and you stay in your own key.</p>
   <div class="pair">
     <div class="drop" id="tsong-drop">Song</div>
     <div class="drop" id="ttake-drop">Your singing</div>
@@ -205,7 +211,8 @@
 <section class="tool" id="key">
   <div class="eyebrow">Transpose</div>
   <h2>Change key</h2>
-  <p>Drop a <b>song</b> to move it up or down in pitch without changing its speed, for example to fit your range.</p>
+  <p class="what">Makes a whole song higher or lower without speeding it up or slowing it down, so it fits your voice when you sing along.</p>
+  <p>Drop a <b>song</b> and choose how many semitones to move it. Negative numbers make it lower.</p>
   <div class="drop" id="key-drop">Song</div>
   <div class="opts">
     <label>Semitones <input type="number" id="semitones" value="-2" min="-12" max="12" step="1"></label>
@@ -219,7 +226,8 @@
 <section class="tool" id="lyrics">
   <div class="eyebrow">Time the words</div>
   <h2>Lyrics timing</h2>
-  <p>Drop a <b>song</b> to get its lyrics timed word by word, as LRC (karaoke players) and SRT (video subtitles) files.</p>
+  <p class="what">Makes karaoke lyrics: works out when each word is sung, so the words can light up in time.</p>
+  <p>Drop a <b>song</b>. You get LRC files (for karaoke players) and SRT files (for video subtitles).</p>
   <div class="drop" id="lsong-drop">Song</div>
   <div class="opts"><textarea id="lyrics-text" rows="5" placeholder="Optional, and much more accurate: paste the real lyrics here, one line per line."></textarea></div>
   <div class="opts"><button class="start" id="lyrics-go" disabled>Time the lyrics</button></div>

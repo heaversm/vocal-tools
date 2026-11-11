@@ -2,7 +2,7 @@
 
 Audio tools on one local web page. Everything runs on your own machine. No accounts, no API keys, nothing uploaded.
 
-- **Split.** Drop a song, get the vocals and the instrumental as separate files, or four parts: vocals, drums, bass and everything else. Uses [Demucs](https://github.com/facebookresearch/demucs).
+- **Split.** Drop a song, get the vocals and the instrumental as separate files, or four parts: vocals, drums, bass and everything else. Uses [Demucs](https://github.com/adefossez/demucs).
 - **Convert.** Drop a *performance* (the melody, timing and delivery to keep) and a *target voice* (1–30 s of the voice it should sound like). You get the performance back in the target voice. Uses [Seed-VC](https://github.com/Plachtaa/seed-vc). Works for singing and speech.
 - **Sync.** Drop a song and a recording of you singing it. Your singing is lined up with the song and mixed over the instrumental. It matches by melody rather than lyrics, so it works in any language, in a different key or octave, and for a take that covers only part of the song. Each phrase is placed on its own, so rushed or stretched gaps between lines still land on time. It never changes your speed within a phrase.
 - **Pitch match.** Same inputs as Sync. After lining your take up, it tracks the pitch of your voice and the original singer's and scores how often you were on the note (within 50 cents, half a semitone), how far you typically missed, and whether you lean sharp or flat. A chart shows your pitch over the original melody. Singing in another key or octave isn't counted against you.
@@ -29,9 +29,11 @@ cd vocal-tools
 
 ## Run
 
-On a Mac, open **Vocal Tools** from `~/Applications` (setup builds it; drag it to the Dock to keep it handy). Or double-click `start.command` in Finder, or run `./start.command`.
+On a Mac, open **Vocal Tools** from `~/Applications` (or press Cmd+Space and type Vocal Tools). It opens http://localhost:8010 in your browser. You can also double-click `start.command`.
 
-It opens http://localhost:8010 and a Terminal window. The tools run while that window is open; close it or press Ctrl+C to stop. Opening the app again while it's running just reopens the page. If you move this folder, run `./make-app.sh` to rebuild the app.
+The tools run as a background service: they start when you log in, keep running with no window open, and restart themselves if they crash. Bookmarking http://localhost:8010 works too. To manage the service, use `./service.sh`: `status`, `restart` (after changing `server.py`), `stop`, `uninstall`, or `log`. The log is `data/server.log`. If you move this folder, run `./make-app.sh` and `./service.sh install`.
+
+On Linux, `./start.command` runs the tools in the terminal until you press Ctrl+C.
 
 Every result is listed in the **Library** at the bottom of the page, with play, download, delete, and a button that opens its folder in Finder. Files are stored in `data/` inside this folder:
 
