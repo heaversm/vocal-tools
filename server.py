@@ -6,6 +6,7 @@
   Tune     - same inputs again; pulls the singing onto the original singer's notes (tune.py).
   Key      - drop a song, get it higher or lower at the same speed, optionally the instrumental too (key.py).
   Lyrics   - drop a song (and optionally paste its lyrics), get word-timed LRC/SRT files (lyrics.py).
+  Transcribe - drop a video or audio file, get what's said or sung as text and SRT subtitles (transcribe.py).
   Library  - every result, with play, download, delete, and a link to the folder on disk.
 
 Install once with ./setup.sh, then open the Vocal Tools app (or run ./start.command).
@@ -26,7 +27,8 @@ import time
 import uuid
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlparse
+from urllib.parse import parse_qs, unquote, urlencode, urlparse
+from urllib.request import Request, urlopen
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # for sync.py; start.command runs Python with -I, which leaves this folder out
@@ -226,9 +228,9 @@ def run_tune(job, song, take, take_has_music, strength):
             (folder / leftover).unlink(missing_ok=True)
         s = stem(take_name)
         meta = finish(job, "Tune", f"{take_name} tuned to {song_name}",
-                      [("Tuned mix", "tuned_mix.wav", f"{s} - tuned mix.wav"),
-                       ("Tuned vocal", "tuned_vocal.wav", f"{s} - tuned vocal.wav"),
-                       ("Before", "synced_vocal.wav", f"{s} - synced vocal.wav")],
+                      [("Your vocals", "synced_vocal.wav", f"{s} - your vocals.wav"),
+                       ("Tuned vocals", "tuned_vocal.wav", f"{s} - tuned vocals.wav"),
+                       ("Mix", "tuned_mix.wav", f"{s} - tuned mix.wav")],
                       f"{round(r['before'] * 100)}% → {round(r['after'] * 100)}% on pitch, strength {round(strength * 100)}%")
         JOBS[job] = {"state": "done", "tune": r, **meta}
     except Exception as e:
@@ -237,6 +239,44 @@ def run_tune(job, song, take, take_has_music, strength):
     finally:
         remove(song_path.parent)
         remove(take_path.parent)
+
+
+LANGUAGES = {"en": "English", "es": "Spanish", "fr": "French", "de": "German", "it": "Italian", "pt": "Portuguese",
+             "nl": "Dutch", "sv": "Swedish", "pl": "Polish", "ru": "Russian", "uk": "Ukrainian", "tr": "Turkish",
+             "ar": "Arabic", "hi": "Hindi", "ja": "Japanese", "ko": "Korean", "zh": "Chinese"}
+
+
+def run_transcribe(job, media, has_music):
+    media_path, media_name = media
+    folder = RESULTS / job
+    try:
+        import transcribe
+        r = transcribe.transcribe(media_path, folder, has_music)
+        remove(folder / "work")
+        s = stem(media_name)
+        meta = finish(job, "Transcribe", media_name,
+                      [("Transcript", "transcript.txt", f"{s} - transcript.txt"),
+                       ("SRT", "transcript.srt", f"{s}.srt")],
+                      f"{LANGUAGES.get(r['language'], r['language'])}, {len(r['text'].split())} words")
+        JOBS[job] = {"state": "done", "text": r["text"], **meta}
+    except Exception as e:
+        remove(folder)
+        JOBS[job] = {"state": "failed", "error": str(e)}
+    finally:
+        remove(media_path.parent)
+
+
+def lookup_lyrics(artist, title):
+    """Plain lyrics from LRCLIB (lrclib.net), a free, open lyrics database. Only the artist and title are sent."""
+    url = "https://lrclib.net/api/search?" + urlencode({"artist_name": artist, "track_name": title})
+    req = Request(url, headers={"User-Agent": "vocal-tools (https://github.com/heaversm/vocal-tools)"})
+    with urlopen(req, timeout=15) as r:
+        found = [x for x in json.load(r) if (x.get("plainLyrics") or "").strip()]
+    if not found:
+        return None
+    x = found[0]
+    return {"artist": x["artistName"], "title": x["trackName"], "duration": x.get("duration"),
+            "lyrics": x["plainLyrics"].strip()}
 
 
 def run_key(job, song, semitones, instrumental):
@@ -317,7 +357,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return self.send(200, (HERE / "about.html").read_bytes(), "text/html; charset=utf-8")
         if url.path == "/library":
             return self.send(200, library())
-        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.(wav|json|lrc|srt))", url.path)
+        m = re.fullmatch(rf"/files/({ID})/([a-z_]+\.(wav|json|lrc|srt|txt))", url.path)
         if m and m.group(2) != "meta.json" and (RESULTS / m.group(1) / m.group(2)).is_file():
             kind = {"wav": "audio/wav", "json": "application/json"}.get(m.group(3), "text/plain; charset=utf-8")
             return self.send(200, (RESULTS / m.group(1) / m.group(2)).read_bytes(), kind)
@@ -360,6 +400,24 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if not song:
                 return self.send(400, {"error": "upload missing; drop the file again"})
             return self.send(200, start(run_lyrics, song, self.body().decode("utf-8", "replace")))
+
+        if url.path == "/transcribe":
+            media = upload(q.get("file"))
+            if not media:
+                return self.send(400, {"error": "upload missing; drop the file again"})
+            return self.send(200, start(run_transcribe, media, q.get("music") == "1"))
+
+        if url.path == "/lookup-lyrics":
+            artist, title = q.get("artist", "").strip(), q.get("title", "").strip()
+            if not title:
+                return self.send(400, {"error": "type the song title first"})
+            try:
+                found = lookup_lyrics(artist, title)
+            except Exception as e:
+                return self.send(502, {"error": f"couldn't reach the lyrics site ({e})"})
+            if not found:
+                return self.send(404, {"error": "no lyrics found; check the spelling, or paste them yourself"})
+            return self.send(200, found)
 
         if url.path == "/key":
             song = upload(q.get("song"))

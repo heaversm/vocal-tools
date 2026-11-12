@@ -60,7 +60,7 @@
 <main>
 <h1>About Vocal Tools</h1>
 <p>These tools were assembled from various audio tools and libraries in order to build the <a href="https://karaokecaptcha.netlify.app">Karaoke Captcha prototype</a>. I figured I'd make them accessible to others for their own purposes.</p>
-<p>Everything runs on your own machine. No accounts, no API keys, nothing uploaded.</p>
+<p>Everything runs on your own machine. No accounts, no API keys, and your audio is never uploaded.</p>
 
 <section class="card" id="start">
   <div class="eyebrow">Get started</div>
@@ -116,8 +116,12 @@ cd vocal-tools
   </div>
 
   <div class="tool">
-    <p><b>Lyrics timing.</b> Drop a song, optionally paste its lyrics, and get them timed word by word as LRC (line and word level, for karaoke players) and SRT (subtitles). Uses <a href="https://github.com/SYSTRAN/faster-whisper">faster-whisper</a>, a reimplementation of OpenAI's Whisper model using <a href="https://github.com/OpenNMT/CTranslate2/">CTranslate2</a> (up to 4 times faster than OpenAI's version), plus forced alignment for English when you paste lyrics.</p>
+    <p><b>Lyrics timing.</b> Drop a song, optionally paste its lyrics, and get them timed word by word as LRC (line and word level, for karaoke players) and SRT (subtitles). Uses <a href="https://github.com/SYSTRAN/faster-whisper">faster-whisper</a>, a reimplementation of OpenAI's Whisper model using <a href="https://github.com/OpenNMT/CTranslate2/">CTranslate2</a> (up to 4 times faster than OpenAI's version), plus forced alignment for English when you paste lyrics. <b>Look up lyrics</b> fetches them from <a href="https://lrclib.net">LRCLIB</a>, a free, open lyrics database, sending only the artist and title you type.</p>
     <p class="how">How: Whisper's own word timings on singing can be seconds off. When you paste the lyrics, a speech model (<a href="https://huggingface.co/facebook/wav2vec2-base-960h">wav2vec 2.0</a>) scores, moment by moment, how likely each letter is. Forced alignment then finds the one path through those scores that spells your lyrics in order, which gives every word a start and end time.</p>
+  </div>
+  <div class="tool">
+    <p><b>Transcribe.</b> Drop a video or audio file, and get what's said or sung written out as text and as SRT subtitles. Uses the same faster-whisper model as Lyrics timing, in any language.</p>
+    <p class="how">How: ffmpeg pulls the sound out of the video. If you tick "Has music in it", Demucs separates the voice from the music first, which helps Whisper hear the words. Long lines are split into subtitles of at most 84 characters, each timed by its own words.</p>
   </div>
 </section>
 

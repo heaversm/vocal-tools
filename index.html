@@ -54,6 +54,9 @@
   .drop::after { content: "Drop a file, or click to choose"; display: block; font-size: 13px; font-weight: 400; color: var(--text-faint); margin-top: 2px; }
   .drop:hover, .drop.over { border-color: var(--pink-soft); background: rgba(255, 46, 147, .1); }
   .drop.busy { opacity: .45; pointer-events: none; }
+  .drop { position: relative; }
+  .drop input[type=file] { position: absolute; inset: 0; width: 100%; height: 100%; opacity: 0; cursor: pointer; font-size: 0; }
+  .drop:focus-within { outline: 2px solid var(--pink-soft); outline-offset: 2px; }
   .drop.filled { border-style: solid; border-color: rgba(125, 255, 176, .6); background: rgba(125, 255, 176, .06); color: #fff; }
   .drop.filled::after { content: "Click to choose a different file"; }
   .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -64,6 +67,8 @@
   .opts label { display: inline-flex; align-items: center; gap: 8px; }
   input[type=number], textarea { font: inherit; color: #fff; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
   input[type=number] { width: 4.5rem; }
+  input[type=text] { font: inherit; color: #fff; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-width: 11rem; }
+  input[type=text]::placeholder { color: var(--text-faint); }
   textarea { width: 100%; padding: 10px 12px; resize: vertical; }
   textarea::placeholder { color: var(--text-faint); }
   input:focus-visible, textarea:focus-visible, button:focus-visible, .drop:focus-visible { outline: 2px solid var(--pink-soft); outline-offset: 2px; }
@@ -118,7 +123,7 @@
     <a class="logo" href="#"><span class="logo-mic">🎤</span><span class="wordmark">Vocal Tools</span></a>
     <nav>
       <a href="#split">Split</a><a href="#convert">Convert</a><a href="#sync">Sync</a><a href="#pitch">Pitch</a>
-      <a href="#tune">Tune</a><a href="#key">Key</a><a href="#lyrics">Lyrics</a><a href="#library">Library</a><a href="/about">About</a>
+      <a href="#tune">Tune</a><a href="#key">Key</a><a href="#lyrics">Lyrics</a><a href="#transcribe">Transcribe</a><a href="#library">Library</a><a href="/about">About</a>
     </nav>
   </div>
 </header>
@@ -126,7 +131,7 @@
 <main>
 <section class="intro">
   <h1>Split, sing, score.</h1>
-  <p>Audio tools for vocals. Everything runs on this machine; nothing is uploaded anywhere else. Every result is kept in the <a href="#library">Library</a> at the bottom.</p>
+  <p>Audio tools for vocals. Everything runs on this machine; your audio is never uploaded anywhere else. Every result is kept in the <a href="#library">Library</a> at the bottom.</p>
 </section>
 
 <section class="tool" id="split">
@@ -162,9 +167,9 @@
   <div class="eyebrow">Line up</div>
   <h2>Sync</h2>
   <p class="what">Lines your singing up with the real song so it lands on the beat, then plays your voice over the song's music.</p>
-  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. It works in any language, in a different key, or if you only sang part of the song. Each line is moved into place on its own; your singing is never sped up or slowed down.</p>
+  <p>Drop the <b>original song, with the singer's vocals in it</b>, and a <b>recording of you singing it</b>. It matches your melody against the original singer's, so a music-only track won't work. Your recording is best a cappella; if you sang over music, tick the box below. It works in any language, in a different key, or if you only sang part of the song. Each line is moved into place on its own; your singing is never sped up or slowed down.</p>
   <div class="pair">
-    <div class="drop" id="song-drop">Song</div>
+    <div class="drop" id="song-drop">Original song (with vocals)</div>
     <div class="drop" id="take-drop">Your singing</div>
   </div>
   <div class="opts">
@@ -178,9 +183,9 @@
   <div class="eyebrow">Score</div>
   <h2>Pitch match</h2>
   <p class="what">A score card for your singing: how often you hit the right notes, whether you sing too high or too low, and a chart of your notes next to the singer's. It doesn't change your recording.</p>
-  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Singing in a different key isn't counted against you.</p>
+  <p>Drop the <b>original song, with the singer's vocals in it</b> (the full song or the vocals alone), and a <b>recording of you singing it</b>. You're scored against the original singer's vocal, so a music-only track won't work. Singing in a different key isn't counted against you.</p>
   <div class="pair">
-    <div class="drop" id="psong-drop">Song</div>
+    <div class="drop" id="psong-drop">Original song (with vocals)</div>
     <div class="drop" id="ptake-drop">Your singing</div>
   </div>
   <div class="opts">
@@ -194,9 +199,9 @@
   <div class="eyebrow">Correct</div>
   <h2>Tune to original</h2>
   <p class="what">Auto-tune aimed at the real singer's notes. It nudges your off notes toward theirs, and it still sounds like you.</p>
-  <p>Drop a <b>song</b> and a <b>recording of you singing it</b>. Strength sets how hard it nudges. Your timing doesn't change, and you stay in your own key.</p>
+  <p>Drop the <b>original song, with the singer's vocals in it</b>, and a <b>recording of you singing it</b>. Your notes are nudged toward the original singer's vocal, so a music-only track won't work. Strength sets how hard it nudges. Your timing doesn't change, and you stay in your own key.</p>
   <div class="pair">
-    <div class="drop" id="tsong-drop">Song</div>
+    <div class="drop" id="tsong-drop">Original song (with vocals)</div>
     <div class="drop" id="ttake-drop">Your singing</div>
   </div>
   <div class="opts">
@@ -227,12 +232,32 @@
   <div class="eyebrow">Time the words</div>
   <h2>Lyrics timing</h2>
   <p class="what">Makes karaoke lyrics: works out when each word is sung, so the words can light up in time.</p>
-  <p>Drop a <b>song</b>. You get LRC files (for karaoke players) and SRT files (for video subtitles).</p>
+  <p>Drop a <b>song</b>. You get LRC files (for karaoke players) and SRT files (for video subtitles). If you add lyrics, put each sung line on its own line, pressing Enter between lines: each one becomes a separate line on screen.</p>
   <div class="drop" id="lsong-drop">Song</div>
-  <div class="opts"><textarea id="lyrics-text" rows="5" placeholder="Optional, and much more accurate: paste the real lyrics here, one line per line."></textarea></div>
+  <div class="opts">
+    <input type="text" id="lyr-artist" placeholder="Artist" aria-label="Artist">
+    <input type="text" id="lyr-title" placeholder="Song title" aria-label="Song title">
+    <button class="ghost" id="lyr-lookup">Look up lyrics</button>
+    <span class="hint" id="lyr-found"></span>
+  </div>
+  <div class="opts"><textarea id="lyrics-text" rows="5" placeholder="Optional, and much more accurate: look the lyrics up above, or type them here. Press Enter after each sung line."></textarea></div>
   <div class="opts"><button class="start" id="lyrics-go" disabled>Time the lyrics</button></div>
-  <p class="hint">Without lyrics it uses what Whisper hears, which on singing is often wrong. With English lyrics pasted, each word is pinned precisely in clips up to about 40 s; in longer songs some words can be a few seconds off.</p>
+  <p class="hint">Look up lyrics sends only the artist and title (never your audio) to <a href="https://lrclib.net">LRCLIB</a>, a free, open lyrics database. Check what it finds: it may be a different version of the song. Without lyrics it uses what Whisper hears, which on singing is often wrong. With English lyrics pasted, each word is pinned precisely in clips up to about 40 s; in longer songs some words can be a few seconds off.</p>
   <div id="lyrics-results"></div>
+</section>
+
+<section class="tool" id="transcribe">
+  <div class="eyebrow">Write down the words</div>
+  <h2>Transcribe</h2>
+  <p class="what">Listens to a video and writes down what's said or sung, so you have the words as text and as subtitles.</p>
+  <p>Drop a <b>video</b> (mp4, mov…) or an audio file. Any language. You get the transcript as a text file and as SRT subtitles you can load into a video editor or YouTube.</p>
+  <div class="drop" id="tmedia-drop">Video or audio</div>
+  <div class="opts">
+    <label><input type="checkbox" id="tmedia-music"> Has music in it (separate the voice first: slower, but hears the words better)</label>
+    <button class="start" id="transcribe-go" disabled>Transcribe</button>
+  </div>
+  <p class="hint">Uses Whisper on this machine. Speech comes out well; singing is harder, and some words may be wrong, so check the text.</p>
+  <div id="transcribe-results"></div>
 </section>
 
 <section class="tool" id="library">
@@ -264,10 +289,9 @@ function dropZone(el, onFile) {
   const pick = document.createElement('input');
   pick.type = 'file';
   pick.accept = 'audio/*,video/*';
-  pick.hidden = true;
-  el.append(pick);
-  el.onclick = e => { if (e.target !== pick) pick.click(); };
-  pick.onchange = () => pick.files[0] && onFile(pick.files[0]);
+  pick.title = '';
+  el.append(pick);  // stretched invisibly over the box (see .drop input), so a click opens the picker natively
+  pick.onchange = () => { if (pick.files[0]) onFile(pick.files[0]); pick.value = ''; };
   el.ondragover = e => { e.preventDefault(); el.classList.add('over'); };
   el.ondragleave = () => el.classList.remove('over');
   el.ondrop = e => {
@@ -512,7 +536,45 @@ keyGo.onclick = async () => {
   } catch (err) { fail(box, err); }
 };
 
+// ---------- transcribe ----------
+const transcribeGo = $('transcribe-go');
+const transcribePicked = filePair(['tmedia'], transcribeGo);
+transcribeGo.onclick = async () => {
+  const media = transcribePicked.tmedia;
+  const box = resultBox($('transcribe-results'), media.name, 'Uploading…');
+  const t0 = performance.now();
+  try {
+    const f = await postFile('/upload', media);
+    const q = new URLSearchParams({ file: f.id, music: $('tmedia-music').checked ? '1' : '0' });
+    const st = await waitFor((await post('/transcribe?' + q)).job, box.querySelector('p'), t0, 'Listening');
+    const pre = document.createElement('pre');
+    pre.className = 'lyrics';
+    pre.textContent = st.text;
+    showResult(box, st, `Done in ${seconds(t0)} s. ${st.note}.`);
+    box.querySelector('p').after(pre);
+  } catch (err) { fail(box, err); }
+};
+
 // ---------- lyrics ----------
+const lyrLookup = $('lyr-lookup');
+lyrLookup.onclick = async () => {
+  const found = $('lyr-found');
+  found.classList.remove('error');
+  found.textContent = 'Looking up…';
+  lyrLookup.disabled = true;
+  try {
+    const q = new URLSearchParams({ artist: $('lyr-artist').value, title: $('lyr-title').value });
+    const r = await post('/lookup-lyrics?' + q);
+    $('lyrics-text').value = r.lyrics;
+    const len = r.duration ? ` (${Math.floor(r.duration / 60)}:${String(Math.round(r.duration % 60)).padStart(2, '0')})` : '';
+    found.textContent = `Found: ${r.artist} – ${r.title}${len}. Edit below if needed.`;
+  } catch (e) {
+    found.classList.add('error');
+    found.textContent = e.message;
+  } finally {
+    lyrLookup.disabled = false;
+  }
+};
 const lyricsGo = $('lyrics-go');
 const lyricsPicked = filePair(['lsong'], lyricsGo);
 lyricsGo.onclick = async () => {
